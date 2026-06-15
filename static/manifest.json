@@ -1,0 +1,16 @@
+{
+  "name": "Kadamba Restaurant Ordering System",
+  "short_name": "Kadamba",
+  "start_url": "/table/1",
+  "display": "standalone",
+  "background_color": "#f8f6f0",
+  "theme_color": "#231F20",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/static/logo1.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kadamba | Table 0{{ table_id }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=4">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+</head>
+<body data-table="{{ table_id }}">
+
+    <!-- INITIALIZATION ENTRY SCREEN OVERLAY (ASK FOR NAME & PHONE) -->
+    <div id="welcomeModal" class="modal-window-mask" style="display: none; align-items: center;">
+        <div class="modal-slide-sheet" style="border-radius: 20px; margin: 20px; max-height: unset; align-self: center;">
+            <div class="modal-top-bar" style="border-radius: 16px 16px 0 0; justify-content: center;">
+                <h3>Welcome to Kadamba | ಕದಂಬ 🙏</h3>
+            </div>
+            <div style="padding: 25px 20px; background: var(--bg-surface); border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;">
+                <p style="margin-bottom: 20px; font-size: 14px; color: var(--text-muted); text-align: center;">Please enter your details to view our menu and start ordering.</p>
+                
+                <div style="margin-bottom: 16px;">
+                    <label style="display:block; margin-bottom: 6px; font-weight: bold; font-size: 14px; color: var(--secondary);">Your Full Name *</label>
+                    <input type="text" id="custNameInput" placeholder="e.g. Rahul" style="width:100%; padding: 14px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 15px; outline:none;">
+                </div>
+                
+                <div style="margin-bottom: 25px;">
+                    <label style="display:block; margin-bottom: 6px; font-weight: bold; font-size: 14px; color: var(--secondary);">Mobile Number *</label>
+                    <input type="tel" id="custPhoneInput" placeholder="Enter 10-digit phone number" maxlength="10" oninput="this.value=this.value.replace(/[^0-9]/g,'');" style="width:100%; padding: 14px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 15px; outline:none;">
+                </div>
+                
+                <button class="btn-primary" style="padding: 15px; font-size: 16px;" onclick="saveCustomerDetails()">Proceed to Menu ➡️</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BRAND TOP HEADER SECTION -->
+    <div class="header">
+        <div class="header-content">
+            <div class="brand-container">
+                <img src="{{ url_for('static', filename='logo1.png') }}" alt="Kadamba Logo" class="header-logo">
+                <span>ಕದಂಬ | TABLE 0{{ table_id }}</span>
+            </div>
+            <span class="header-tagline">Classic Tradition</span>
+        </div>
+    </div>
+
+    <!-- MAIN MENU VIEWPORT WINDOW -->
+    <div class="main-container">
+        <div class="menu">
+            <!-- ENGINE SEARCH TERMINAL -->
+            <div class="search-container">
+                <input type="text" id="menuSearch" oninput="filterMenu()" placeholder="🔍 Search dishes (e.g., Dosa, Pongal, Meals)...">
+            </div>
+            
+            <!-- CATEGORY 1: BREAKFAST SELECTIONS -->
+            <div class="menu-category-section">
+                <div class="category-header"><span>South Indian Breakfast</span></div>
+                <div class="menu-grid">
+                    <div class="card"><h3>Khara Pongal</h3><p class="price">Rs. 90</p><button onclick="addItem('Khara Pongal', 90)">Add to Cart</button></div>
+                    <div class="card"><h3>Sweet Pongal</h3><p class="price">Rs. 90</p><button onclick="addItem('Sweet Pongal', 90)">Add to Cart</button></div>
+                    <div class="card"><h3>Poori</h3><p class="price">Rs. 80</p><button onclick="addItem('Poori', 80)">Add to Cart</button></div>
+                    <div class="card"><h3>Masala Vada</h3><p class="price">Rs. 50</p><button onclick="addItem('Masala Vada', 50)">Add to Cart</button></div>
+                    <div class="card"><h3>Bhajji / Pakoda</h3><p class="price">Rs. 50</p><button onclick="addItem('Bhajji / Pakoda', 50)">Add to Cart</button></div>
+                    <div class="card"><h3>Bonda / Rava Vada</h3><p class="price">Rs. 50</p><button onclick="addItem('Bonda / Rava Vada', 50)">Add to Cart</button></div>
+                    <div class="card"><h3>Curd Vada</h3><p class="price">Rs. 60</p><button onclick="addItem('Curd Vada', 60)">Add to Cart</button></div>
+                    <div class="card"><h3>Puliyogare</h3><p class="price">Rs. 90</p><button onclick="addItem('Puliyogare', 90)">Add to Cart</button></div>
+                    <div class="card"><h3>Vangibath</h3><p class="price">Rs. 90</p><button onclick="addItem('Vangibath', 90)">Add to Cart</button></div>
+                </div>
+            </div>
+
+            <!-- CATEGORY 2: COMPLETE DOSA MATRIX -->
+            <div class="menu-category-section">
+                <div class="category-header">
+                    <span>Dosa Varieties</span>
+                    <span class="category-timing">⏰ 7:00 am to 10:30 pm</span>
+                </div>
+                <div class="menu-grid">
+                    <div class="card"><h3>Plain Dosa</h3><p class="price">Rs. 70</p><button onclick="addItem('Plain Dosa', 70)">Add to Cart</button></div>
+                    <div class="card"><h3>Masala Dosa</h3><p class="price">Rs. 80</p><button onclick="addItem('Masala Dosa', 80)">Add to Cart</button></div>
+                    <div class="card"><h3>Set Dosa</h3><p class="price">Rs. 80</p><button onclick="addItem('Set Dosa', 80)">Add to Cart</button></div>
+                    <div class="card"><h3>Palak Dosa</h3><p class="price">Rs. 90</p><button onclick="addItem('Palak Dosa', 90)">Add to Cart</button></div>
+                    <div class="card"><h3>Palak Masala Dosa</h3><p class="price">Rs. 100</p><button onclick="addItem('Palak Masala Dosa', 100)">Add to Cart</button></div>
+                    <div class="card"><h3>Vegetable Uthappa</h3><p class="price">Rs. 100</p><button onclick="addItem('Vegetable Uthappa', 100)">Add to Cart</button></div>
+                    <div class="card"><h3>Onion Masala Dosa</h3><p class="price">Rs. 110</p><button onclick="addItem('Onion Masala Dosa', 110)">Add to Cart</button></div>
+                    <div class="card"><h3>Onion Uthappa</h3><p class="price">Rs. 100</p><button onclick="addItem('Onion Uthappa', 100)">Add to Cart</button></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PERSISTENT APP TRACER RIBBON FOR CONSOLE ACCESS (UNSCROLLABLE AT BOTTOM) -->
+    <div class="bottom-action-tray">
+        <button class="tray-toggle-btn" onclick="openCartOverlay()">
+            <span style="display: flex; align-items: center; gap: 8px;">🛒 <strong>View Cart & Tracking Status</strong></span>
+            <span class="tray-count-badge" id="trayCount">0 Items</span>
+        </button>
+    </div>
+
+    <!-- NON-SCROLLABLE FULL SCREEN INTERACTIVE POPUP OVERLAY SHEET -->
+    <div id="appModalOverlay" class="modal-window-mask">
+        <div class="modal-slide-sheet">
+            
+            <div class="modal-top-bar">
+                <h3>Order Center Panel</h3>
+                <button class="modal-dismiss-cross" onclick="closeCartOverlay()">✕ Close</button>
+            </div>
+
+            <div class="modal-scroller-content">
+                <!-- CART MONITOR CONTAINER -->
+                <div class="cart-box">
+                    <h3>🛒 Current Selections (Table 0{{ table_id }})</h3>
+                    <ul id="cart"></ul>
+                    <div class="cart-summary"><h4>Total Summary: Rs. <span id="total">0</span></h4></div>
+                    <button class="btn-primary" style="padding: 14px;" onclick="placeOrder()">Place Order</button>
+                </div>
+                
+                <!-- LIVE RADAR ORDER TRACKING MONITOR -->
+                <div class="tracking-box">
+                    <h3>📋 Live Prep Tracker Status</h3>
+                    <div id="history"><p class="empty-state">No active orders placed.</p></div>
+                    <button class="btn-secondary" style="margin-top: 15px; padding: 12px;" onclick="downloadBillAndClear()">🧾 Download Thermal Bill</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}?v=4"></script>
+</body>
+</html>

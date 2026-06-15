@@ -1,0 +1,299 @@
+:root {
+    --primary: #231F20;
+    --secondary: #C5A059;
+    --bg-main: #fcfbfa;
+    --bg-surface: #ffffff;
+    --text-dark: #231F20;
+    --text-muted: #747d8c;
+    --border-color: #e8e2d5;
+    --radius-lg: 16px;
+    --radius-sm: 8px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-dark);
+    padding-bottom: 80px; 
+}
+
+/* Header UI Elements */
+.header {
+    background: var(--primary);
+    color: var(--secondary);
+    padding: 16px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border-bottom: 3px solid var(--secondary);
+}
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 800px;
+    margin: auto;
+}
+.brand-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 800;
+    font-size: 18px;
+}
+.header-logo {
+    height: 32px;
+    width: auto;
+}
+.header-tagline {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.8;
+}
+
+.main-container {
+    max-width: 800px;
+    margin: auto;
+    padding: 15px;
+}
+
+/* Menu Filter Bar */
+.search-container {
+    margin-bottom: 20px;
+}
+.search-container input {
+    width: 100%;
+    padding: 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 16px;
+    outline: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+/* Menu Layout Groupings */
+.menu-category-section {
+    margin-bottom: 30px;
+}
+.category-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f1ebd9;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 15px;
+    border-left: 4px solid var(--secondary);
+}
+.category-timing {
+    font-size: 12px;
+    font-weight: normal;
+    color: #6d644e;
+}
+
+.menu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+}
+.kitchen-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+/* Menu Cards */
+.card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+}
+.card h3 {
+    font-size: 15px;
+    margin-bottom: 6px;
+    color: var(--primary);
+}
+.card .price {
+    color: var(--secondary);
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 12px;
+}
+.card button {
+    background: var(--primary);
+    color: var(--secondary);
+    border: 1px solid var(--secondary);
+    padding: 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+.card button:hover {
+    background: var(--secondary);
+    color: var(--primary);
+}
+
+/* Mobile Action Tray */
+.bottom-action-tray {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--primary);
+    padding: 12px 20px;
+    border-top: 2px solid var(--secondary);
+    z-index: 900;
+}
+.tray-toggle-btn {
+    max-width: 760px;
+    margin: auto;
+    width: 100%;
+    background: transparent;
+    border: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #fff;
+    font-size: 15px;
+    cursor: pointer;
+}
+.tray-count-badge {
+    background: var(--secondary);
+    color: var(--primary);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+/* Modal Overlay Frameworks */
+.modal-window-mask {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: none;
+    justify-content: center;
+}
+.modal-slide-sheet {
+    background: var(--bg-main);
+    width: 100%;
+    max-width: 500px;
+    align-self: flex-end;
+    max-height: 85vh;
+    border-top-left-radius: var(--radius-lg);
+    border-top-right-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 -5px 25px rgba(0,0,0,0.15);
+}
+.modal-top-bar {
+    background: var(--primary);
+    color: var(--secondary);
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.modal-dismiss-cross {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.modal-scroller-content {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Functional Containers */
+.cart-box, .tracking-box, .order-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+}
+.cart-box h3, .tracking-box h3 {
+    font-size: 16px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 6px;
+}
+.cart-summary {
+    margin: 15px 0;
+    text-align: right;
+    font-size: 16px;
+}
+.empty-state {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 20px 0;
+    font-size: 14px;
+}
+
+/* Tracker Badges */
+.status-badge {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    float: right;
+}
+.status-badge.pending { background: #ffeaa7; color: #d63031; }
+.status-badge.accepted { background: #81ecec; color: #008b8b; }
+.status-badge.served { background: #55efc4; color: #00b894; }
+
+/* Control Buttons Elements */
+.btn-primary {
+    background: var(--primary);
+    color: var(--secondary);
+    border: 1px solid var(--secondary);
+    font-weight: 700;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-align: center;
+}
+.btn-secondary {
+    background: transparent;
+    color: var(--primary);
+    border: 1px solid var(--primary);
+    font-weight: 700;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-align: center;
+}
+.btn-accept, .btn-serve {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+    color: white;
+}
+.btn-accept { background: #e67e22; }
+.btn-serve { background: #2ecc71; }
