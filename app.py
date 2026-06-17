@@ -1,148 +1,164 @@
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
+import json
+import os
+import time
 
 app = Flask(__name__)
 
-# Master in-memory data store
-orders = []
-order_id_counter = 1
+DB_FILE = "orders_session.json"
+kitchen_status = {1: 0, 2: 0}
 
-@app.route('/')
-def home():
-    # Defaults to Table 1 if no specific table URL is hit
-    return render_template('customer.html', table_id=1)
+def load_persisted_db():
+    if not os.path.exists(DB_FILE):
+        return [], 1, 0
+    try:
+        with open(DB_FILE, "r") as f:
+            data = json.load(f)
+            orders = data.get("orders", [])
+            counter = data.get("counter", 1)
+            routing_idx = data.get("routing_idx", 0)
+            return orders, counter, routing_idx
+    except:
+        return [], 1, 0
+
+def save_persisted_db(orders, counter, routing_idx):
+    try:
+        with open(DB_FILE, "w") as f:
+            json.dump({
+                "orders": orders,
+                "counter": counter,
+                "routing_idx": routing_idx
+            }, f, indent=4)
+    except Exception as e:
+        print(f"File writing failure: {e}")
+
+orders_db, order_id_counter, order_routing_index = load_persisted_db()
 
 @app.route('/table/<int:table_id>')
-def customer_table(table_id):
-    # Dynamically maps any infinite table index seamlessly
+def customer_terminal(table_id):
     return render_template('customer.html', table_id=table_id)
 
-@app.route('/kitchen')
-def kitchen_dashboard():
-    return render_template('kitchen.html')
+@app.route('/kitchen1')
+def kitchen_one_terminal():
+    return render_template('kitchen1.html')
+
+@app.route('/kitchen2')
+def kitchen_two_terminal():
+    return render_template('kitchen2.html')
+
+@app.route('/waiter')
+def waiter_terminal():
+    return render_template('waiter.html')
+
+@app.route('/kitchen_ping', methods=['POST'])
+def kitchen_ping():
+    try:
+        data = request.get_json()
+        k_id = int(data.get('kitchen_id', 0))
+        if k_id in kitchen_status:
+            kitchen_status[k_id] = time.time()
+        return jsonify({"success": True})
+    except:
+        return jsonify({"success": False}), 400
 
 @app.route('/place_order', methods=['POST'])
 def place_order():
-    global order_id_counter
-    data = request.get_json() or {}
-    items = data.get('items', [])
-    table_id = data.get('table_id', 1) 
-    customer_name = data.get('customer_name', 'Guest')
-    customer_phone = data.get('customer_phone', 'N/A')
-    
-    if not items:
-        return jsonify({"success": False, "message": "Cart is empty"}), 400
+    global orders_db, order_id_counter, order_routing_index
+    try:
+        data = request.get_json()
+        fixed_now_epoch_ms = int(datetime.now().timestamp() * 1000)
         
-    order_total = sum(item['price'] * item['qty'] for item in items)
-    
-    # Injects live clock timestamp right at the moment of creation
-    current_time = datetime.now().strftime("%d-%b-%Y | %I:%M %p")
-    
-    new_order = {
-        "id": order_id_counter,
-        "table_id": table_id,
-        "customer_name": customer_name,
-        "customer_phone": customer_phone,
-        "items": items,
-        "total": order_total,
-        "status": "Pending",
-        "timestamp": current_time
-    }
-    orders.append(new_order)
-    order_id_counter += 1
-    return jsonify({"success": True})
+        is_kitchen2_active = (time.time() - kitchen_status[2]) < 7
+        if is_kitchen2_active:
+            if (order_routing_index % 8) < 4:
+                assigned_kitchen = 1
+            else:
+                assigned_kitchen = 2
+        else:
+            assigned_kitchen = 1
+            
+        processed_items = []
+        for item in data.get('items', []):
+            processed_items.append({
+                "name": item.get('name'),
+                "qty": int(item.get('qty', 1)),
+                "price": float(item.get('price', 0))
+            })
+            
+        new_order = {
+            "id": order_id_counter,
+            "table_id": int(data.get('table_id', 0)),
+            "customer_name": data.get('customer_name', 'Guest'),
+            "customer_phone": data.get('customer_phone', 'N/A'),
+            "date": datetime.now().strftime("%m/%d/%Y"), 
+            "timestamp": datetime.now().strftime("%I:%M %p"),
+            "placed_at_timestamp": fixed_now_epoch_ms, 
+            "served_at_timestamp": None,
+            "duration_string": "",
+            "items": processed_items,
+            "status": "Pending",
+            "kitchen_id": assigned_kitchen
+        }
+        
+        orders_db.append(new_order)
+        
+        order_id_counter += 1
+        order_routing_index += 1
+        save_persisted_db(orders_db, order_id_counter, order_routing_index)
+        
+        return jsonify({"success": True, "token": new_order["id"], "kitchen": assigned_kitchen}), 201
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
 
 @app.route('/get_orders')
 def get_orders():
-    return jsonify(orders)
+    is_kitchen2_active = (time.time() - kitchen_status[2]) < 7
+    return jsonify({
+        "orders": orders_db,
+        "kitchen2_active": is_kitchen2_active
+    })
 
 @app.route('/history')
-def get_history():
-    return jsonify(orders)
+def order_history():
+    return jsonify(orders_db)
 
 @app.route('/update_status', methods=['POST'])
 def update_status():
-    data = request.get_json() or {}
-    order_id = data.get('id')
-    new_status = data.get('status')
-    
-    for order in orders:
-        if order['id'] == order_id:
-            order['status'] = new_status
-            break
-            
-    return jsonify({"success": True})
-
-@app.route('/invoice/<int:table_id>')
-def generate_invoice(table_id):
-    order_ids_str = request.args.get('ids')
-    customer_name = request.args.get('name', 'Guest')
-    customer_phone = request.args.get('phone', 'N/A')
-    
-    if order_ids_str:
-        allowed_ids = [int(x) for x in order_ids_str.split(',') if x.isdigit()]
-        table_orders = [o for o in orders if o['id'] in allowed_ids]
-    else:
-        table_orders = [o for o in orders if o['table_id'] == table_id and o['status'] == 'Served']
+    global orders_db, order_id_counter, order_routing_index
+    try:
+        data = request.get_json()
+        target_id = int(data.get('id'))
+        target_status = data.get('status')
         
-    if not table_orders:
-        return f"""
-        <div style="text-align:center; margin-top:50px; font-family:sans-serif;">
-            <h2>❌ No active served orders found for Table {table_id}</h2>
-            <a href="/table/{table_id}" style="color:#C5A059; font-weight:bold;">Return to Menu</a>
-        </div>
-        """, 404
-    
-    html = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <title>Kadamba Receipt - Table 0{table_id}</title>
-        <style>
-            body {{ font-family: 'Courier New', Courier, monospace; padding: 20px; background: #f8f6f0; color: #231F20; }}
-            .receipt-box {{ max-width: 360px; margin: auto; background: #fff; padding: 25px 20px; border: 1px solid #e8e2d5; }}
-            .center {{ text-align: center; }}
-            .right {{ text-align: right; }}
-            table {{ width: 100%; margin-top: 20px; border-collapse: collapse; }}
-            th, td {{ padding: 6px 0; font-size: 14px; }}
-            th {{ border-bottom: 2px dashed #231F20; text-align: left; }}
-            .total-row {{ border-top: 2px dashed #231F20; font-weight: bold; font-size: 16px; }}
-            .btn-print {{ display: block; width: 100%; padding: 12px; background: #231F20; color: #C5A059; text-align: center; border: 1px solid #C5A059; font-weight: bold; margin-top: 25px; cursor: pointer; text-decoration: none; border-radius: 6px; }}
-            @media print {{ .no-print {{ display: none !important; }} }}
-        </style>
-    </head>
-    <body>
-        <div class="receipt-box">
-            <h2 class="center" style="margin-bottom: 4px;">ಕದಂಬ / KADAMBA</h2>
-            <p class="center" style="margin-top: 0; font-size: 13px;">Classic Tradition<br>Moodbidri, Karnataka</p>
-            <div style="border-top: 1px dashed #231F20; margin: 15px 0;"></div>
-            <p><strong>TABLE NO:</strong> 0{table_id}</p>
-            <p><strong>CUSTOMER:</strong> {customer_name.upper()}</p>
-            <p><strong>PHONE NO:</strong> {customer_phone}</p>
-            <table>
-                <thead>
-                    <tr><th>Item</th><th class="center">Qty</th><th class="right">Amt</th></tr>
-                </thead>
-                <tbody>
-    """
-    grand_total = 0
-    for order in table_orders:
-        for item in order['items']:
-            grand_total += item['price'] * item['qty']
-            html += f"<tr><td>{item['name']}</td><td class='center'>{item['qty']}</td><td class='right'>Rs. {item['price'] * item['qty']}</td></tr>"
-            
-    html += f"""
-                    <tr class="total-row"><td colspan="2" style="padding-top:10px;">GRAND TOTAL</td><td class="right" style="padding-top:10px;">Rs. {grand_total}</td></tr>
-                </tbody>
-            </table>
-            <div style="border-top: 1px dashed #231F20; margin: 20px 0 15px 0;"></div>
-            <button class="btn-print no-print" onclick="window.print()">🖨️ Print Thermal Bill</button>
-        </div>
-    </body>
-    </html>
-    """
-    return html
+        for order in orders_db:
+            if order['id'] == target_id:
+                order['status'] = target_status
+                if target_status == "Served" and not order['served_at_timestamp']:
+                    now_ms = int(datetime.now().timestamp() * 1000)
+                    order['served_at_timestamp'] = now_ms
+                    
+                    diff_seconds = int((now_ms - order['placed_at_timestamp']) / 1000)
+                    if diff_seconds < 60:
+                        order['duration_string'] = f"{diff_seconds} sec"
+                    else:
+                        order['duration_string'] = f"{diff_seconds // 60} min {diff_seconds % 60} sec"
+                        
+                save_persisted_db(orders_db, order_id_counter, order_routing_index)
+                return jsonify({"success": True}), 200
+        return jsonify({"success": False}), 404
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+@app.route('/clear_day_logs', methods=['POST'])
+def clear_day_logs():
+    global orders_db, order_id_counter, order_routing_index
+    payload_backup = list(orders_db)
+    orders_db = []
+    order_id_counter = 1
+    order_routing_index = 0
+    save_persisted_db(orders_db, order_id_counter, order_routing_index)
+    return jsonify({"success": True, "archive": payload_backup})
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

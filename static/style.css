@@ -102,13 +102,23 @@ body {
 
 .menu-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 20px;
 }
 .kitchen-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 20px;
+}
+.card img {
+    width: 100%;
+    aspect-ratio: 1 / 1;    /* Magic rule: sets width and height to 1:1 square */
+    object-fit: cover;      /* Automatically crops your huge JPGs into the square */
+    border-radius: 6px;
+    display: block;
+    margin-bottom: 6px;
+    background: #eee;
 }
 
 /* Menu Cards */
@@ -148,6 +158,60 @@ body {
     background: var(--secondary);
     color: var(--primary);
 }
+/* --- Horizontal Oval Slider Setup --- */
+.top-category-nav {
+    display: flex;
+    overflow-x: auto;
+    gap: 10px;
+    padding: 12px 15px;
+    background: var(--bg-surface, #ffffff);
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+    position: sticky;
+    top: 67px;
+    z-index: 99;
+    scrollbar-width: none;
+}
+.top-category-nav::-webkit-scrollbar {
+    display: none;
+}
+
+/* Perfect Safe Oval Buttons */
+.nav-item-btn {
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    padding: 8px 16px;
+    background: var(--bg-main, #f8f9fa);
+    border: 1px solid var(--border-color, #e0e0e0);
+    border-radius: 24px; /* Creates clean oval shape */
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-main, #222222);
+    text-decoration: none;
+    transition: all 0.15s ease-in-out;
+}
+
+/* Bullet Dots inside the Ovals */
+.nav-item-btn .bullet-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--secondary, #C5A059); /* Gold Brand Dot */
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+/* Active Interactions */
+.nav-item-btn:active, .nav-item-btn:hover {
+    background: var(--secondary, #C5A059);
+    color: #ffffff;
+    border-color: var(--secondary, #C5A059);
+}
+.nav-item-btn:active .bullet-dot, .nav-item-btn:hover .bullet-dot {
+    background-color: #ffffff;
+}
+
 
 /* Mobile Action Tray */
 .bottom-action-tray {
@@ -297,3 +361,17 @@ body {
 }
 .btn-accept { background: #e67e22; }
 .btn-serve { background: #2ecc71; }
+@media (max-width: 340px) {
+    .menu-grid { 
+        grid-template-columns: repeat(2, 1fr); 
+    }
+}
+/* 1. Force the page to slide smoothly when a category is pressed */
+html {
+    scroll-behavior: smooth;
+}
+
+/* 2. Create a landing cushion so the sticky nav doesn't hide the title */
+.category-title {
+    scroll-margin-top: 140px; /* Adjust this number if it sits too high or low */
+}

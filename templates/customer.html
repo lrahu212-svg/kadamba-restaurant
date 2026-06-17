@@ -4,91 +4,160 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Kadamba | Table 0{{ table_id }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=7">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 </head>
 <body data-table="{{ table_id }}">
 
-    <!-- INITIALIZATION ENTRY SCREEN OVERLAY (ASK FOR NAME & PHONE) -->
-    <div id="welcomeModal" class="modal-window-mask" style="display: none; align-items: center;">
-        <div class="modal-slide-sheet" style="border-radius: 20px; margin: 20px; max-height: unset; align-self: center;">
+    <div id="welcomeModal" class="modal-window-mask" style="display: none; align-items: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; backdrop-filter: blur(6px); background-color: rgba(0, 0, 0, 0.4);">
+        <div class="modal-slide-sheet" style="border-radius: 20px; margin: 20px; max-height: unset; align-self: center; width: 100%; max-width: 400px;">
             <div class="modal-top-bar" style="border-radius: 16px 16px 0 0; justify-content: center;">
                 <h3>Welcome to Kadamba | ಕದಂಬ 🙏</h3>
             </div>
             <div style="padding: 25px 20px; background: var(--bg-surface); border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;">
                 <p style="margin-bottom: 20px; font-size: 14px; color: var(--text-muted); text-align: center;">Please enter your details to view our menu and start ordering.</p>
-                
                 <div style="margin-bottom: 16px;">
                     <label style="display:block; margin-bottom: 6px; font-weight: bold; font-size: 14px; color: var(--secondary);">Your Full Name *</label>
                     <input type="text" id="custNameInput" placeholder="e.g. Rahul" style="width:100%; padding: 14px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 15px; outline:none;">
                 </div>
-                
                 <div style="margin-bottom: 25px;">
                     <label style="display:block; margin-bottom: 6px; font-weight: bold; font-size: 14px; color: var(--secondary);">Mobile Number *</label>
                     <input type="tel" id="custPhoneInput" placeholder="Enter 10-digit phone number" maxlength="10" oninput="this.value=this.value.replace(/[^0-9]/g,'');" style="width:100%; padding: 14px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 15px; outline:none;">
                 </div>
-                
-                <button class="btn-primary" style="padding: 15px; font-size: 16px;" onclick="saveCustomerDetails()">Proceed to Menu ➡️</button>
+                <button class="btn-primary" style="padding: 15px; font-size: 16px; width: 100%;" onclick="saveCustomerDetails()">Proceed to Menu ➡️</button>
             </div>
         </div>
     </div>
 
-    <!-- BRAND TOP HEADER SECTION -->
-    <div class="header">
-        <div class="header-content">
-            <div class="brand-container">
-                <img src="{{ url_for('static', filename='logo1.png') }}" alt="Kadamba Logo" class="header-logo">
-                <span>ಕದಂಬ | TABLE 0{{ table_id }}</span>
+    <div style="display: flex; flex-direction: column; width: 100%; padding: 0; margin: 0; position: sticky; top: 0; z-index: 1000; background-color: var(--bg-surface, #ffffff);">
+        
+        <div class="header" style="padding: 4px 0; margin: 0;">
+            <div class="header-content" style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding-right: 12px; box-sizing: border-box;">
+                <div class="brand-container" style="display: flex; align-items: center;">
+                    <img src="{{ url_for('static', filename='logo1.png') }}" alt="Kadamba Logo" class="header-logo" style="height: 35px; width: auto;">
+                    <span style="font-size: 14px;">ಕದಂಬ | TABLE 0{{ table_id }}</span>
+                </div>
+                <img src="{{ url_for('static', filename='scanlogobg.png') }}" alt="SCAN Logo" style="height: 35px; width: auto; object-fit: contain; flex-shrink: 0;">
             </div>
-            <span class="header-tagline">Classic Tradition</span>
         </div>
+
+        <div class="top-category-nav" style="margin: 0; padding-top: 0;">
+            <a href="#mangalorean" class="nav-item-btn"><span class="bullet-dot"></span> Mangalorean</a>
+            <a href="#snacks" class="nav-item-btn"><span class="bullet-dot"></span> Snacks & Street</a>
+            <a href="#bites" class="nav-item-btn"><span class="bullet-dot"></span> Light Bites</a>
+            <a href="#beverages" class="nav-item-btn"><span class="bullet-dot"></span> Beverages</a>
+            <a href="#desserts" class="nav-item-btn"><span class="bullet-dot"></span> Desserts</a>
+        </div>
+
     </div>
 
-    <!-- MAIN MENU VIEWPORT WINDOW -->
-    <div class="main-container">
-        <div class="menu">
-            <!-- ENGINE SEARCH TERMINAL -->
+    <div class="main-container" style="display: flex; flex-direction: column; min-height: calc(100vh - 180px); justify-content: space-between;">
+        <div class="menu" style="flex: 1;">
             <div class="search-container">
-                <input type="text" id="menuSearch" oninput="filterMenu()" placeholder="🔍 Search dishes (e.g., Dosa, Pongal, Meals)...">
+                <input type="text" id="menuSearch" oninput="filterMenu()" placeholder="🔍 Search food items...">
             </div>
-            
-            <!-- CATEGORY 1: BREAKFAST SELECTIONS -->
-            <div class="menu-category-section">
-                <div class="category-header"><span>South Indian Breakfast</span></div>
+
+            <div id="mangalorean" class="menu-category-section">
+                <div class="category-header">
+                    <span>Mangalorean & Coastal Specialties</span>
+                    <span class="category-timing">Available</span>
+                </div>
                 <div class="menu-grid">
-                    <div class="card"><h3>Khara Pongal</h3><p class="price">Rs. 90</p><button onclick="addItem('Khara Pongal', 90)">Add to Cart</button></div>
-                    <div class="card"><h3>Sweet Pongal</h3><p class="price">Rs. 90</p><button onclick="addItem('Sweet Pongal', 90)">Add to Cart</button></div>
-                    <div class="card"><h3>Poori</h3><p class="price">Rs. 80</p><button onclick="addItem('Poori', 80)">Add to Cart</button></div>
-                    <div class="card"><h3>Masala Vada</h3><p class="price">Rs. 50</p><button onclick="addItem('Masala Vada', 50)">Add to Cart</button></div>
-                    <div class="card"><h3>Bhajji / Pakoda</h3><p class="price">Rs. 50</p><button onclick="addItem('Bhajji / Pakoda', 50)">Add to Cart</button></div>
-                    <div class="card"><h3>Bonda / Rava Vada</h3><p class="price">Rs. 50</p><button onclick="addItem('Bonda / Rava Vada', 50)">Add to Cart</button></div>
-                    <div class="card"><h3>Curd Vada</h3><p class="price">Rs. 60</p><button onclick="addItem('Curd Vada', 60)">Add to Cart</button></div>
-                    <div class="card"><h3>Puliyogare</h3><p class="price">Rs. 90</p><button onclick="addItem('Puliyogare', 90)">Add to Cart</button></div>
-                    <div class="card"><h3>Vangibath</h3><p class="price">Rs. 90</p><button onclick="addItem('Vangibath', 90)">Add to Cart</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='kori_rotti.jpg') }}"><h3>Kori Rotti</h3><p class="price">Rs. 150</p><button onclick="addItem('Kori Rotti', 150)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='neer_dosa.jpg') }}"><h3>Neer Dosa</h3><p class="price">Rs. 60</p><button onclick="addItem('Neer Dosa', 60)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='goli_baje.jpg') }}"><h3>Goli Baje</h3><p class="price">Rs. 50</p><button onclick="addItem('Goli Baje', 50)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='mangalore_buns.jpg') }}"><h3>Mangalore Buns</h3><p class="price">Rs. 60</p><button onclick="addItem('Mangalore Buns', 60)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='churumuri.jpg') }}"><h3>Churumuri</h3><p class="price">Rs. 50</p><button onclick="addItem('Churumuri', 50)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='pathrode.jpg') }}"><h3>Pathrode</h3><p class="price">Rs. 80</p><button onclick="addItem('Pathrode', 80)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='kori_ghee_roast.jpg') }}"><h3>Kori Ghee Roast</h3><p class="price">Rs. 220</p><button onclick="addItem('Kori Ghee Roast', 220)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='yetti_ghee_roast.jpg') }}"><h3>Yetti Ghee Roast</h3><p class="price">Rs. 250</p><button onclick="addItem('Yetti Ghee Roast', 250)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='kadle_bajil.jpg') }}"><h3>Kadle Bajil</h3><p class="price">Rs. 70</p><button onclick="addItem('Kadle Bajil', 70)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='moode.jpg') }}"><h3>Moode</h3><p class="price">Rs. 40</p><button onclick="addItem('Moode', 40)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='sannas.jpg') }}"><h3>Sannas</h3><p class="price">Rs. 50</p><button onclick="addItem('Sannas', 50)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='fish_curry.jpg') }}"><h3>Coconut Fish Curry</h3><p class="price">Rs. 180</p><button onclick="addItem('Coconut Fish Curry', 180)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='kane_fry.jpg') }}"><h3>Kane Rava Fry</h3><p class="price">Rs. 200</p><button onclick="addItem('Kane Rava Fry', 200)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='upkari.jpg') }}"><h3>Vegetable Upkari</h3><p class="price">Rs. 60</p><button onclick="addItem('Vegetable Upkari', 60)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='chips.jpg') }}"><h3>Jackfruit Chips</h3><p class="price">Rs. 50</p><button onclick="addItem('Jackfruit Chips', 50)">Add</button></div>
                 </div>
             </div>
 
-            <!-- CATEGORY 2: COMPLETE DOSA MATRIX -->
-            <div class="menu-category-section">
+            <div id="snacks" class="menu-category-section">
                 <div class="category-header">
-                    <span>Dosa Varieties</span>
-                    <span class="category-timing">⏰ 7:00 am to 10:30 pm</span>
+                    <span>Snacks & Street Food</span>
+                    <span class="category-timing">Available</span>
                 </div>
                 <div class="menu-grid">
-                    <div class="card"><h3>Plain Dosa</h3><p class="price">Rs. 70</p><button onclick="addItem('Plain Dosa', 70)">Add to Cart</button></div>
-                    <div class="card"><h3>Masala Dosa</h3><p class="price">Rs. 80</p><button onclick="addItem('Masala Dosa', 80)">Add to Cart</button></div>
-                    <div class="card"><h3>Set Dosa</h3><p class="price">Rs. 80</p><button onclick="addItem('Set Dosa', 80)">Add to Cart</button></div>
-                    <div class="card"><h3>Palak Dosa</h3><p class="price">Rs. 90</p><button onclick="addItem('Palak Dosa', 90)">Add to Cart</button></div>
-                    <div class="card"><h3>Palak Masala Dosa</h3><p class="price">Rs. 100</p><button onclick="addItem('Palak Masala Dosa', 100)">Add to Cart</button></div>
-                    <div class="card"><h3>Vegetable Uthappa</h3><p class="price">Rs. 100</p><button onclick="addItem('Vegetable Uthappa', 100)">Add to Cart</button></div>
-                    <div class="card"><h3>Onion Masala Dosa</h3><p class="price">Rs. 110</p><button onclick="addItem('Onion Masala Dosa', 110)">Add to Cart</button></div>
-                    <div class="card"><h3>Onion Uthappa</h3><p class="price">Rs. 100</p><button onclick="addItem('Onion Uthappa', 100)">Add to Cart</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='masala_puri.jpg') }}"><h3>Masala Puri</h3><p class="price">Rs. 60</p><button onclick="addItem('Masala Puri', 60)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='sandwich.jpg') }}"><h3>Veggie Sandwich</h3><p class="price">Rs. 80</p><button onclick="addItem('Veggie Sandwich', 80)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='paneer_tikka.jpg') }}"><h3>Paneer Tikka</h3><p class="price">Rs. 150</p><button onclick="addItem('Paneer Tikka', 150)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='pakoras.jpg') }}"><h3>Onion Pakoras</h3><p class="price">Rs. 60</p><button onclick="addItem('Onion Pakoras', 60)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='wedges.jpg') }}"><h3>Potato Wedges</h3><p class="price">Rs. 90</p><button onclick="addItem('Potato Wedges', 90)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='sticks.jpg') }}"><h3>Mozzarella Sticks</h3><p class="price">Rs. 120</p><button onclick="addItem('Mozzarella Sticks', 120)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='wings.jpg') }}"><h3>Chicken Wings</h3><p class="price">Rs. 180</p><button onclick="addItem('Chicken Wings', 180)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='egg_rolls.jpg') }}"><h3>Egg Rolls</h3><p class="price">Rs. 90</p><button onclick="addItem('Egg Rolls', 90)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='corn_chaat.jpg') }}"><h3>Corn Chaat</h3><p class="price">Rs. 70</p><button onclick="addItem('Corn Chaat', 70)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='samosas.jpg') }}"><h3>Samosas</h3><p class="price">Rs. 40</p><button onclick="addItem('Samosas', 40)">Add</button></div>
+                </div>
+            </div>
+
+            <div id="bites" class="menu-category-section">
+                <div class="category-header">
+                    <span>Light Bites & Salads</span>
+                    <span class="category-timing">Available</span>
+                </div>
+                <div class="menu-grid">
+                    <div class="card"><img src="{{ url_for('static', filename='greek_salad.jpg') }}"><h3>Greek Salad</h3><p class="price">Rs. 120</p><button onclick="addItem('Greek Salad', 120)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='caesar_salad.jpg') }}"><h3>Caesar Salad</h3><p class="price">Rs. 120</p><button onclick="addItem('Caesar Salad', 120)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='hummus.jpg') }}"><h3>Hummus & Pita</h3><p class="price">Rs. 110</p><button onclick="addItem('Hummus & Pita', 110)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='garlic_bread.jpg') }}"><h3>Garlic Bread</h3><p class="price">Rs. 80</p><button onclick="addItem('Garlic Bread', 80)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='soup.jpg') }}"><h3>Tomato Basil Soup</h3><p class="price">Rs. 90</p><button onclick="addItem('Tomato Basil Soup', 90)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='avocado.jpg') }}"><h3>Avocado Toast</h3><p class="price">Rs. 130</p><button onclick="addItem('Avocado Toast', 130)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='grilled_cheese.jpg') }}"><h3>Grilled Cheese</h3><p class="price">Rs. 100</p><button onclick="addItem('Grilled Cheese', 100)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='fruit_salad.jpg') }}"><h3>Fruit Salad</h3><p class="price">Rs. 90</p><button onclick="addItem('Fruit Salad', 90)">Add</button></div>
+                </div>
+            </div>
+
+            <div id="beverages" class="menu-category-section">
+                <div class="category-header">
+                    <span>Beverages & Refreshments</span>
+                    <span class="category-timing">Available</span>
+                </div>
+                <div class="menu-grid">
+                    <div class="card"><img src="{{ url_for('static', filename='coffee.jpg') }}"><h3>Filter Coffee</h3><p class="price">Rs. 30</p><button onclick="addItem('Filter Coffee', 30)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='tea.jpg') }}"><h3>Masala Chai</h3><p class="price">Rs. 30</p><button onclick="addItem('Masala Chai', 30)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='sol_kadhi.jpg') }}"><h3>Sol Kadhi</h3><p class="price">Rs. 50</p><button onclick="addItem('Sol Kadhi', 50)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='neer_majjige.jpg') }}"><h3>Neer Majjige</h3><p class="price">Rs. 30</p><button onclick="addItem('Neer Majjige', 30)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='lime_soda.jpg') }}"><h3>Fresh Lime Soda</h3><p class="price">Rs. 40</p><button onclick="addItem('Fresh Lime Soda', 40)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='coconut.jpg') }}"><h3>Tender Coconut Water</h3><p class="price">Rs. 60</p><button onclick="addItem('Tender Coconut Water', 60)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='lassi.jpg') }}"><h3>Mango Lassi</h3><p class="price">Rs. 70</p><button onclick="addItem('Mango Lassi', 70)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='cold_coffee.jpg') }}"><h3>Cold Coffee</h3><p class="price">Rs. 80</p><button onclick="addItem('Cold Coffee', 80)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='juice.jpg') }}"><h3>Fresh Fruit Juice</h3><p class="price">Rs. 60</p><button onclick="addItem('Fresh Fruit Juice', 60)">Add</button></div>
+                </div>
+            </div>
+
+            <div id="desserts" class="menu-category-section">
+                <div class="category-header">
+                    <span>Sweets & Desserts</span>
+                    <span class="category-timing">Available</span>
+                </div>
+                <div class="menu-grid">
+                    <div class="card"><img src="{{ url_for('static', filename='gudbud.jpg') }}"><h3>Gudbud Ice Cream</h3><p class="price">Rs. 120</p><button onclick="addItem('Gudbud Ice Cream', 120)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='holige.jpg') }}"><h3>Holige</h3><p class="price">Rs. 40</p><button onclick="addItem('Holige', 40)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='payasam.jpg') }}"><h3>Semiya Payasam</h3><p class="price">Rs. 60</p><button onclick="addItem('Semiya Payasam', 60)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='brownie.jpg') }}"><h3>Chocolate Brownie</h3><p class="price">Rs. 90</p><button onclick="addItem('Chocolate Brownie', 90)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='halwa.jpg') }}"><h3>Carrot Halwa</h3><p class="price">Rs. 70</p><button onclick="addItem('Carrot Halwa', 70)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='jamun.jpg') }}"><h3>Gulab Jamun</h3><p class="price">Rs. 50</p><button onclick="addItem('Gulab Jamun', 50)">Add</button></div>
+                    <div class="card"><img src="{{ url_for('static', filename='custard.jpg') }}"><h3>Fruit Custard</h3><p class="price">Rs. 70</p><button onclick="addItem('Fruit Custard', 70)">Add</button></div>
                 </div>
             </div>
         </div>
+
+        <div style="margin: 40px auto 20px auto; text-align: center; border-top: 1px dashed rgba(0,0,0,0.1); width: 90%; padding-top: 20px;">
+            <span style="font-size: 11px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; display: block; margin-bottom: 5px;">Powered By</span>
+            <img src="{{ url_for('static', filename='volcanobg.png') }}" alt="Volcano Logo" style="width: 120px; height: auto;">
+        </div>
     </div>
 
-    <!-- PERSISTENT APP TRACER RIBBON FOR CONSOLE ACCESS (UNSCROLLABLE AT BOTTOM) -->
     <div class="bottom-action-tray">
         <button class="tray-toggle-btn" onclick="openCartOverlay()">
             <span style="display: flex; align-items: center; gap: 8px;">🛒 <strong>View Cart & Tracking Status</strong></span>
@@ -96,17 +165,13 @@
         </button>
     </div>
 
-    <!-- NON-SCROLLABLE FULL SCREEN INTERACTIVE POPUP OVERLAY SHEET -->
     <div id="appModalOverlay" class="modal-window-mask">
         <div class="modal-slide-sheet">
-            
             <div class="modal-top-bar">
                 <h3>Order Center Panel</h3>
                 <button class="modal-dismiss-cross" onclick="closeCartOverlay()">✕ Close</button>
             </div>
-
             <div class="modal-scroller-content">
-                <!-- CART MONITOR CONTAINER -->
                 <div class="cart-box">
                     <h3>🛒 Current Selections (Table 0{{ table_id }})</h3>
                     <ul id="cart"></ul>
@@ -114,17 +179,19 @@
                     <button class="btn-primary" style="padding: 14px;" onclick="placeOrder()">Place Order</button>
                 </div>
                 
-                <!-- LIVE RADAR ORDER TRACKING MONITOR -->
-                <div class="tracking-box">
-                    <h3>📋 Live Prep Tracker Status</h3>
-                    <div id="history"><p class="empty-state">No active orders placed.</p></div>
-                    <button class="btn-secondary" style="margin-top: 15px; padding: 12px;" onclick="downloadBillAndClear()">🧾 Download Thermal Bill</button>
+                <div id="liveTrackingSection" class="tracking-box" style="margin-top:15px; display: flex; flex-direction: column; align-items: center;">
+                    <h3 style="width: 100%;">📋 Live Prep Tracker Status</h3>
+                    <div id="history" style="width: 100%;"><p class="empty-state">No active orders placed.</p></div>
+                    
+                    <div style="margin-top: 20px; text-align: center; border-top: 1px dashed rgba(0,0,0,0.1); width: 100%; padding-top: 15px;">
+                        <span style="font-size: 11px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; display: block; margin-bottom: 5px;">Powered By</span>
+                        <img src="{{ url_for('static', filename='volcanobg.png') }}" alt="Volcano Logo" style="width: 110px; height: auto;">
+                    </div>
                 </div>
             </div>
-
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='script.js') }}?v=7"></script>
 </body>
 </html>
