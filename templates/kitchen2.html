@@ -22,6 +22,18 @@
 <body data-kitchen="2">
     <div class="header-bar">
         <span id="stationHeadingText" class="station-title">KITCHEN 2</span>
+        
+        <div style="display: flex; gap: 10px; align-items: center; background: #2a2a2a; padding: 4px 12px; border-radius: 6px; border: 1px solid #444;">
+            <select id="printerTypeSelect" onchange="changePrinterSetup()" style="background: #111; color: #fff; border: 1px solid #555; padding: 5px; border-radius: 4px; font-size: 13px; font-weight: bold; cursor: pointer;">
+                <option value="none">🖨️ No Auto-Printer</option>
+                <option value="usb">🔌 USB Thermal Printer</option>
+                <option value="bluetooth">🔵 Bluetooth Printer</option>
+                <option value="wifi">🌐 Wi-Fi Network Printer</option>
+            </select>
+            <button id="printerConnectBtn" onclick="actionConnectPrinter()" style="display:none; background: #f1c40f; color: #000; border: none; padding: 5px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Link Printer</button>
+            <span id="printerStatusText" style="font-size:12px; color:#fff; font-weight: bold;"></span>
+        </div>
+
         <span id="ordersPendingCountText" class="pending-badge">Pending Orders: 0</span>
     </div>
     <div id="kitchenGrid" class="grid-4pieces"></div>

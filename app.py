@@ -202,5 +202,22 @@ def clear_day_logs():
     save_persisted_db(orders_db, order_id_counter, order_routing_index)
     return jsonify({"success": True, "archive": payload_backup})
 
+# NEW ADDITION: Network socket router for silent Wi-Fi direct printing bypasses browser CORS limits
+@app.route('/print_to_wifi', methods=['POST'])
+def print_to_wifi():
+    try:
+        data = request.get_json()
+        printer_ip = data.get('ip')
+        text_content = data.get('text')
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(3.0)
+        s.connect((printer_ip, 9100)) # Standard network thermal printer port
+        s.sendall(text_content.encode('utf-8'))
+        s.close()
+        return jsonify({"success": True}), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 200
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
