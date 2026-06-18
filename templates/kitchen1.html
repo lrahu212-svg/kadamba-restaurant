@@ -2,27 +2,41 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>KITCHEN 2 MONITOR</title>
+    <title>KITCHEN 1 TERMINAL</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
-        body { margin: 0; padding: 12px; background: #000; color: #fff; font-family: sans-serif; height: 100vh; box-sizing: border-box; overflow: hidden; }
-        .grid-4pieces { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 16px; height: calc(100vh - 90px); }
-        .header-bar { background: #111; border: 1px solid #222; color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px; margin-bottom: 12px; }
-        .station-title { font-size: 24px; font-weight: bold; text-transform: uppercase; color: #3498db; font-family: monospace; }
+        body { margin: 0; padding: 10px; background: #0b0b0b; color: #fff; font-family: sans-serif; height: 100vh; box-sizing: border-box; overflow: hidden; }
+        .grid-4pieces { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px; height: calc(100vh - 65px); }
+        .header-bar { background: #222; border: 1px solid #444; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 6px; margin-bottom: 8px; }
+        .station-title { font-size: 22px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #f1c40f; }
+        .pending-badge { font-size: 16px; font-weight: bold; background: #e74c3c; padding: 4px 12px; border-radius: 20px; text-transform: uppercase; }
+        .order-block { background: #141414; border: 3px solid #222; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; height: 100%; transition: border-color 0.2s ease-in-out; }
+        .card-top { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 6px; margin-bottom: 6px; flex-shrink: 0; }
+        .table-title { font-size: 30px; font-weight: 900; }
+        .timer-large { font-size: 36px; font-family: monospace; background: #ffeaa7; color: #000; padding: 4px 12px; border-radius: 6px; font-weight: bold; }
+        .items-list { flex-grow: 1; color: #fff; column-count: 2; column-gap: 24px; column-rule: 2px dashed #444; overflow: hidden; }
+        .item-line { break-inside: avoid; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .meta-text { font-size: 13px; color: #888; margin-top: 6px; padding-top: 4px; border-top: 1px solid #222; flex-shrink: 0; }
     </style>
 </head>
-<body data-kitchen="2">
-
+<body data-kitchen="1">
     <div class="header-bar">
-        <span class="station-title">📺 KITCHEN 2 DISPLAY MONITOR</span>
+        <span id="stationHeadingText" class="station-title">KITCHEN 1</span>
         
-        <div id="printerSelectionContainer">
-            <span style="color:#555; font-size:13px;">Detecting system configuration printers...</span>
+        <div style="display: flex; gap: 10px; align-items: center; background: #2a2a2a; padding: 4px 12px; border-radius: 6px; border: 1px solid #444;">
+            <select id="printerTypeSelect" onchange="changePrinterSetup()" style="background: #111; color: #fff; border: 1px solid #555; padding: 5px; border-radius: 4px; font-size: 13px; font-weight: bold; cursor: pointer;">
+                <option value="none">🖨️ No Auto-Printer</option>
+                <option value="usb">🔌 USB Thermal Printer</option>
+                <option value="bluetooth">🔵 Bluetooth Printer</option>
+                <option value="wifi">🌐 Wi-Fi Network Printer</option>
+            </select>
+            <button id="printerConnectBtn" onclick="actionConnectPrinter()" style="display:none; background: #f1c40f; color: #000; border: none; padding: 5px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Link Printer</button>
+            <span id="printerStatusText" style="font-size:12px; color:#fff; font-weight: bold;"></span>
         </div>
+
+        <span id="ordersPendingCountText" class="pending-badge">Pending Orders: 0</span>
     </div>
-
     <div id="kitchenGrid" class="grid-4pieces"></div>
-
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
