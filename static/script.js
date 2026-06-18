@@ -312,13 +312,13 @@ function printTableInvoiceAndClear() {
     });
     localStorage.setItem('invoiced_order_ids', JSON.stringify(invoicedIDs));
 
-    // CHANGED: Empty the local active cart/orders but KEEP customerName and customerPhone intact
+    // Empty the local active cart/orders but KEEP customerName and customerPhone intact
     cart = [];
     currentActiveOrders = [];
     renderCart();
     
     showToast("Invoice Generated & History Cleared! 🧾");
-    loadHistory(); // Updates history view to "No active orders found" instead of forcing user re-registration
+    loadHistory(); 
 }
 
 function calculateDurationText(startTimeMs) {
@@ -419,7 +419,6 @@ function loadOrders() {
         }
 
         if (kitchenGrid) {
-            
             // --- AUTOMATIC KITCHEN INCOMING ORDER SILENT PRINT TRIGGER ---
             let currentMaxId = allOrders.length > 0 ? Math.max(...allOrders.map(o => o.id)) : 0;
             if (typeof window.lastPrintedOrderId === 'undefined') {
@@ -560,7 +559,7 @@ function changePrinterSetup() {
     let statusText = document.getElementById("printerStatusText");
     
     if (selectedPrinterType === "none") {
-        connectBtn.style.style.display = "none";
+        connectBtn.style.display = "none"; // TYPO FIXED HERE
         statusText.innerText = "";
     } else if (selectedPrinterType === "wifi") {
         connectBtn.style.display = "inline-block";
@@ -644,7 +643,7 @@ function generateReceiptText(order) {
         lines.push(`• ${item.name} x ${item.qty}`);
     });
     lines.push("--------------------------------");
-    lines.push("\n\n\n\n"); // Feed line separation space
+    lines.push("\n\n\n\n"); 
     return lines.join("\n");
 }
 
