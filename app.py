@@ -80,9 +80,11 @@ def place_order():
             
         processed_items = []
         for item in data.get('items', []):
+            qty = int(item.get('qty', 1))
             processed_items.append({
                 "name": item.get('name'),
-                "qty": int(item.get('qty', 1)),
+                "qty": qty,
+                "pending_qty": qty,  # TRACKS REMAINING COUNT TO SERVE
                 "price": float(item.get('price', 0))
             })
             
@@ -119,9 +121,47 @@ def get_orders():
         "kitchen2_active": is_kitchen2_active
     })
 
+# RESTORED: Fetch live prep status filtering by specific table
+@app.route('/get_table_orders/<int:table_id>')
+def get_table_orders(table_id):
+    table_orders = [o for o in orders_db if o['table_id'] == table_id]
+    return jsonify({"orders": table_orders})
+
 @app.route('/history')
 def order_history():
     return jsonify(orders_db)
+
+@app.route('/serve_item', methods=['POST'])
+def serve_item():
+    global orders_db, order_id_counter, order_routing_index
+    try:
+        data = request.get_json()
+        target_order_id = int(data.get('order_id'))
+        item_name = data.get('item_name')
+        
+        for order in orders_db:
+            if order['id'] == target_order_id:
+                for item in order['items']:
+                    if item['name'] == item_name and item.get('pending_qty', 0) > 0:
+                        item['pending_qty'] -= 1
+                        break
+                
+                all_served = all(i.get('pending_qty', 0) == 0 for i in order['items'])
+                if all_served and order['status'] != "Served":
+                    order['status'] = "Served"
+                    now_ms = int(datetime.now().timestamp() * 1000)
+                    order['served_at_timestamp'] = now_ms
+                    diff_seconds = int((now_ms - order['placed_at_timestamp']) / 1000)
+                    if diff_seconds < 60:
+                        order['duration_string'] = f"{diff_seconds} sec"
+                    else:
+                        order['duration_string'] = f"{diff_seconds // 60} min {diff_seconds % 60} sec"
+                
+                save_persisted_db(orders_db, order_id_counter, order_routing_index)
+                return jsonify({"success": True}), 200
+        return jsonify({"success": False, "error": "Order or Item not found"}), 404
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
 
 @app.route('/update_status', methods=['POST'])
 def update_status():
@@ -134,19 +174,46 @@ def update_status():
         for order in orders_db:
             if order['id'] == target_id:
                 order['status'] = target_status
-                if target_status == "Served" and not order['served_at_timestamp']:
-                    now_ms = int(datetime.now().timestamp() * 1000)
-                    order['served_at_timestamp'] = now_ms
-                    
-                    diff_seconds = int((now_ms - order['placed_at_timestamp']) / 1000)
-                    if diff_seconds < 60:
-                        order['duration_string'] = f"{diff_seconds} sec"
-                    else:
-                        order['duration_string'] = f"{diff_seconds // 60} min {diff_seconds % 60} sec"
+                if target_status == "Served":
+                    for item in order['items']:
+                        item['pending_qty'] = 0
+                        
+                    if not order['served_at_timestamp']:
+                        now_ms = int(datetime.now().timestamp() * 1000)
+                        order['served_at_timestamp'] = now_ms
+                        diff_seconds = int((now_ms - order['placed_at_timestamp']) / 1000)
+                        if diff_seconds < 60:
+                            order['duration_string'] = f"{diff_seconds} sec"
+                        else:
+                            order['duration_string'] = f"{diff_seconds // 60} min {diff_seconds % 60} sec"
                         
                 save_persisted_db(orders_db, order_id_counter, order_routing_index)
                 return jsonify({"success": True}), 200
         return jsonify({"success": False}), 404
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+# RESTORED: Compiles invoice data for a table AND safely deletes only those table entries on execution
+@app.route('/download_invoice/<int:table_id>', methods=['POST'])
+def download_invoice(table_id):
+    global orders_db, order_id_counter, order_routing_index
+    try:
+        # 1. Isolate the orders belonging to this table
+        invoice_orders = [o for o in orders_db if o['table_id'] == table_id]
+        
+        if not invoice_orders:
+            return jsonify({"success": False, "error": "No orders found for this table layout."}), 404
+            
+        # 2. Clear out ONLY this specific table's orders from the active database array
+        orders_db = [o for o in orders_db if o['table_id'] != table_id]
+        
+        # 3. Permanently write change updates back to orders_session.json
+        save_persisted_db(orders_db, order_id_counter, order_routing_index)
+        
+        return jsonify({
+            "success": True, 
+            "invoice_data": invoice_orders
+        }), 200
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
 

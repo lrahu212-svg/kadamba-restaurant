@@ -2,34 +2,83 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WAITER CONTROL DASHBOARD</title>
     <style>
         body { font-family: system-ui, sans-serif; background: #f1f2f6; margin: 0; padding: 20px; color: #2c3e50; }
-        h1 { margin-top: 0; font-size: 28px; color: #2c3e50; border-bottom: 3px solid #34495e; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        
+        h1 { margin-top: 0; font-size: 28px; color: #2c3e50; border-bottom: 3px solid #34495e; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap; }
+        .header-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        
         .dashboard-container { display: grid; grid-template-columns: 3fr 2fr; gap: 20px; }
         .section-box { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); min-height: 500px; }
         .section-title { font-size: 20px; font-weight: bold; margin-bottom: 15px; color: #34495e; text-transform: uppercase; border-left: 5px solid #e67e22; padding-left: 10px; }
+        
         .queue-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         .waiter-card { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.2s ease; }
         .active-card { border-top: 5px solid #e67e22; }
         .served-card { border-top: 5px solid #27ae60; background: #f9fff9; opacity: 0.9; }
+        
         .badge-station { display: inline-block; background: #34495e; color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
         .meta-line { font-size: 13px; color: #7f8c8d; line-height: 1.4; }
         .item-row { font-size: 14px; padding: 3px 0; border-bottom: 1px dashed #f0f0f0; }
-        .btn-serve-action { background: #e67e22; color: white; border: none; padding: 10px; border-radius: 5px; font-weight: bold; font-size: 14px; margin-top: 10px; transition: background 0.2s; }
+        
+        .btn-serve-action { background: #e67e22; color: white; border: none; padding: 10px; border-radius: 5px; font-weight: bold; font-size: 14px; margin-top: 10px; transition: background 0.2s; cursor: pointer; }
         .btn-serve-action:hover { background: #d35400; }
+        
         .history-stack { display: flex; flex-direction: column; gap: 12px; max-height: 600px; overflow-y: auto; }
+        
         .btn-clear-system { background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; transition: background 0.2s; }
         .btn-clear-system:hover { background: #c0392b; }
+        
+        .sync-badge { font-size: 14px; background: #34495e; color: #fff; padding: 8px 12px; border-radius: 4px; }
+
+        /* --- MOBILE RESPONSIVE MEDIA QUERIES --- */
+        @media (max-width: 900px) {
+            .dashboard-container {
+                /* Stacks the Active Queue and History Log on top of each other */
+                grid-template-columns: 1fr; 
+            }
+            .section-box {
+                min-height: auto; /* Allows boxes to shrink if they don't have much content */
+            }
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 10px; /* Less padding on small screens to save space */
+            }
+            h1 {
+                flex-direction: column;
+                align-items: flex-start;
+                font-size: 22px;
+            }
+            .header-controls {
+                width: 100%;
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .btn-clear-system {
+                width: 100%; /* Makes button span full width for easy tapping */
+            }
+            .sync-badge {
+                text-align: center;
+                margin-left: 0 !important;
+            }
+            .queue-grid {
+                /* Stacks the individual waiter cards into a single column */
+                grid-template-columns: 1fr; 
+            }
+        }
     </style>
 </head>
 <body data-page="waiter">
 
     <h1>
         <span>📋 Waiter Operations Dashboard</span>
-        <div>
+        <div class="header-controls">
             <button class="btn-clear-system" onclick="generateArchivePDFAndClearData()">⚠️ WIPE DATABASE & SAVE ARCHIVE PDF</button>
-            <span style="font-size: 14px; background: #34495e; color: #fff; padding: 8px 12px; border-radius: 4px; margin-left:10px;">Live Feed Auto-Syncing</span>
+            <span class="sync-badge">Live Feed Auto-Syncing</span>
         </div>
     </h1>
 

@@ -172,28 +172,12 @@ function loadHistory() {
         return;
     }
 
-    fetch('/history')
+    fetch(`/get_table_orders/${TABLE_ID}`)
     .then(r => r.json())
-    .then(data => {
-        if (!data || data.length === 0) {
-            box.innerHTML = '<p class="empty-state">No active orders placed.</p>';
-            return;
-        }
-
-        // Retrieve any previously billed/cleared order IDs from LocalStorage
-        let existingCleared = JSON.parse(localStorage.getItem('clearedOrders') || '[]');
-
-        // Filter out orders that belong to this customer but have already been billed
-        let activeOrders = data.filter(o => 
-            parseInt(o.table_id) === parseInt(TABLE_ID) &&
-            o.customer_name.toLowerCase() === customerName.toLowerCase() &&
-            o.customer_phone === customerPhone &&
-            !existingCleared.includes(o.id)
-        );
-        
+    .then(res => {
+        let activeOrders = res.orders || [];
         currentActiveOrders = activeOrders; 
         
-        // This naturally clears the section visually without destroying the DOM tab!
         if (activeOrders.length === 0) {
             box.innerHTML = '<p class="empty-state">No active orders found. Ready for new orders.</p>';
             return;
@@ -245,58 +229,51 @@ function loadHistory() {
     });
 }
 
-// ========================================================
-// COMBINED ALL-ORDERS COMPLETE SESSION THERMAL BILL
-// ========================================================
 function generateCombinedCustomerInvoicePDF() {
     if (currentActiveOrders.length === 0) { alert("No order items available to compute."); return; }
 
-    // --- EDITED PART: Store these order IDs in local storage to clear them from view ---
-    let existingCleared = JSON.parse(localStorage.getItem('clearedOrders') || '[]');
-    currentActiveOrders.forEach(o => {
-        if (!existingCleared.includes(o.id)) existingCleared.push(o.id);
-    });
-    // Keep local storage from getting infinitely large
-    if (existingCleared.length > 500) existingCleared = existingCleared.slice(-500); 
-    localStorage.setItem('clearedOrders', JSON.stringify(existingCleared));
-    // ----------------------------------------------------------------------------------
+    fetch(`/download_invoice/${TABLE_ID}`, { method: 'POST' })
+    .then(r => r.json())
+    .then(res => {
+        if (!res.success) { alert("Server failed to process bill compilation hook."); return; }
 
-    let invoiceWindow = window.open('', '_blank');
-    let combinedItemsMap = {};
-    let grandRunningSum = 0;
+        let ordersToPrint = res.invoice_data || [];
+        let invoiceWindow = window.open('', '_blank');
+        let combinedItemsMap = {};
+        let grandRunningSum = 0;
 
-    currentActiveOrders.forEach(order => {
-        order.items.forEach(item => {
-            if (combinedItemsMap[item.name]) {
-                combinedItemsMap[item.name].qty += parseInt(item.qty);
-            } else {
-                combinedItemsMap[item.name] = {
-                    price: parseFloat(item.price),
-                    qty: parseInt(item.qty)
-                };
-            }
+        ordersToPrint.forEach(order => {
+            order.items.forEach(item => {
+                if (combinedItemsMap[item.name]) {
+                    combinedItemsMap[item.name].qty += parseInt(item.qty);
+                } else {
+                    combinedItemsMap[item.name] = {
+                        price: parseFloat(item.price),
+                        qty: parseInt(item.qty)
+                    };
+                }
+            });
         });
+
+        let linesHTML = Object.keys(combinedItemsMap).map(itemName => {
+            let details = combinedItemsMap[itemName];
+            let sub = details.price * details.qty;
+            grandRunningSum += sub;
+            return `
+                <tr>
+                    <td style="padding: 5px 0;">${itemName}<br><small>${details.qty} x Rs. ${details.price}</small></td>
+                    <td style="text-align: right; vertical-align: bottom; padding: 5px 0;">Rs. ${sub.toFixed(2)}</td>
+                </tr>`;
+        }).join("");
+
+        let currentSystemTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        buildThermalHTMLTemplate(invoiceWindow, `Combined_Final_Bill`, `FINAL COMBINED RECEIPT`, currentSystemTime, linesHTML, grandRunningSum);
+
+        currentActiveOrders = [];
+        setTimeout(loadHistory, 300);
     });
-
-    let linesHTML = Object.keys(combinedItemsMap).map(itemName => {
-        let details = combinedItemsMap[itemName];
-        let sub = details.price * details.qty;
-        grandRunningSum += sub;
-        return `
-            <tr>
-                <td style="padding: 5px 0;">${itemName}<br><small>${details.qty} x Rs. ${details.price}</small></td>
-                <td style="text-align: right; vertical-align: bottom; padding: 5px 0;">Rs. ${sub.toFixed(2)}</td>
-            </tr>`;
-    }).join("");
-
-    let currentSystemTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    buildThermalHTMLTemplate(invoiceWindow, `Combined_Final_Bill`, `FINAL COMBINED RECEIPT`, currentSystemTime, linesHTML, grandRunningSum);
-
-    // Refresh history box immediately to cleanly empty the UI without destroying it
-    setTimeout(loadHistory, 300);
 }
 
-// Helper template structure to write printable thermal layouts
 function buildThermalHTMLTemplate(winObj, docTitle, invoiceScopeLabel, timestampStr, itemsLinesHTML, netAmountValue) {
     let thermalHTML = `
     <html>
@@ -506,6 +483,17 @@ function generateArchivePDFAndClearData() {
     });
 }
 
+function serveSingleFoodItem(orderId, itemName) {
+    fetch('/serve_item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId, item_name: itemName })
+    }).then(() => {
+        loadOrders();
+        if (TABLE_ID > 0) loadHistory();
+    });
+}
+
 function loadOrders() {
     let kitchenGrid = document.getElementById("kitchenGrid");
     let waiterBox = document.getElementById("waiterActiveQueue");
@@ -526,17 +514,25 @@ function loadOrders() {
                     waiterBox.innerHTML = "";
                     unserved.forEach(o => {
                         let orderTotal = 0;
+                        let validActiveRowsCount = 0;
+
                         let itemsHtml = o.items.map(i => {
                             let itemPrice = parseFloat(i.price) || 0;
                             let itemQty = parseInt(i.qty) || 1;
+                            let pendingQty = i.pending_qty !== undefined ? parseInt(i.pending_qty) : itemQty;
                             let itemTotal = itemPrice * itemQty;
                             orderTotal += itemTotal;
                             
-                            return `<div class="item-row" style="display:flex; justify-content:space-between; margin: 4px 0; font-size:14px;">
-                                        <span>• <strong>${i.name}</strong> x ${itemQty}</span>
-                                        <span style="color:#777;">(Rs. ${itemPrice} ea) = <strong>Rs. ${itemTotal}</strong></span>
+                            if (pendingQty <= 0) return ""; 
+                            validActiveRowsCount++;
+
+                            return `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; margin: 6px 0; font-size:14px; padding: 4px 0;">
+                                        <span>• <strong>${i.name}</strong> <span style="background:#e67e22; color:white; padding:1px 6px; border-radius:4px; font-weight:bold; font-size:12px; margin-left:4px;">x${pendingQty} left</span></span>
+                                        <button onclick="serveSingleFoodItem(${o.id}, '${i.name}')" style="padding:4px 8px; background:#27ae60; color:white; border:none; font-weight:bold; border-radius:4px; cursor:pointer; font-size:12px;">✔️ SERVE 1</button>
                                     </div>`;
                         }).join("");
+
+                        if (validActiveRowsCount === 0) return;
 
                         let div = document.createElement("div");
                         div.className = "waiter-card active-card";
@@ -549,10 +545,10 @@ function loadOrders() {
                                     <div style="margin:10px 0; border-top:1px dashed #eee; border-bottom:1px dashed #eee; padding: 6px 0;">${itemsHtml}</div>
                                 </div>
                                 <div>
-                                    <div style="text-align:right; font-size:18px; margin-bottom:12px; color:#2c3e50;">
-                                        Total Amount: <strong style="font-size:22px; color:#27ae60;">Rs. ${orderTotal}</strong>
+                                    <div style="text-align:right; font-size:16px; margin-bottom:8px; color:#2c3e50;">
+                                        Total Order Amount: <strong style="font-size:18px; color:#27ae60;">Rs. ${orderTotal}</strong>
                                     </div>
-                                    <button class="btn-serve-action" style="width:100%; cursor:pointer;" onclick="update(${o.id}, 'Served')">🍽️ MARK SERVED & STOP CLOCK</button>
+                                    <button class="btn-serve-action" style="width:100%; cursor:pointer; background:#27ae60; color:white; border:none; padding:10px; font-weight:bold; border-radius:4px;" onclick="update(${o.id}, 'Served')">⏹️ ALL SERVED</button>
                                 </div>
                             </div>
                         `;
@@ -622,7 +618,9 @@ function loadOrders() {
                 ordersPendingBadge.innerText = `Pending Orders: ${targetQueue.length}`;
             }
 
-            let displayQueue = targetQueue.slice(0, 4);
+            let displayQueue = targetQueue.filter(o => {
+                return o.items.some(i => (i.pending_qty !== undefined ? i.pending_qty : i.qty) > 0);
+            }).slice(0, 4);
 
             for (let i = 0; i < 4; i++) {
                 let slotId = `kitchen-slot-${i}`;
@@ -645,9 +643,11 @@ function loadOrders() {
                 if (itemCount > 15) { fontSize = "13px"; paddingSize = "1px"; }
                 else if (itemCount > 8) { fontSize = "15px"; paddingSize = "2px"; }
 
-                let itemsSummary = o.items.map(item => 
-                    `<div class="item-line" style="font-size: ${fontSize}; padding: ${paddingSize} 0;">• <strong>${item.name}</strong> x ${item.qty}</div>`
-                ).join("");
+                let itemsSummary = o.items.map(item => {
+                    let pendingQty = item.pending_qty !== undefined ? parseInt(item.pending_qty) : parseInt(item.qty);
+                    if (pendingQty <= 0) return ""; 
+                    return `<div class="item-line" style="font-size: ${fontSize}; padding: ${paddingSize} 0;">• <strong>${item.name}</strong> x ${pendingQty}</div>`;
+                }).join("");
 
                 let borderTheme = (KITCHEN_ID_TARGET === 1 && isKitchen2Online) ? "#e74c3c" : 
                                   (KITCHEN_ID_TARGET === 2) ? "#3498db" : "#f1c40f"; 
@@ -704,38 +704,19 @@ window.onload = function() {
         for (let i = 0; i < 4; i++) {
             let slot = document.createElement("div");
             slot.id = `kitchen-slot-${i}`;
-            slot.className = "order-block";
-            slot.style.background = "#141414";
-            slot.style.borderColor = "#222";
-            slot.innerHTML = '<div style="color:#333; font-size:20px; text-align:center; padding-top:45px; font-weight:bold; text-transform:uppercase;">[ Empty Slot ]</div>';
+            slot.className = "kitchen-card-slot";
             kitchenGrid.appendChild(slot);
         }
     }
-
-    verifyUserSession(); 
-    renderCart();
+    verifyUserSession();
     loadOrders();
-    
-    if (KITCHEN_ID_TARGET > 0) {
-        transmitKitchenHeartbeat();
-        setInterval(transmitKitchenHeartbeat, 3000);
-    }
-    if (TABLE_ID > 0) { 
-        loadHistory(); 
-        setInterval(loadHistory, 4000); 
-    }
-    
-    setInterval(loadOrders, 2000);
-    setInterval(() => {
-        document.querySelectorAll(".timer-large").forEach(badge => {
-            let start = parseInt(badge.getAttribute("data-start"));
-            if (start && !isNaN(start)) badge.innerText = calculateDurationText(start);
-        });
-    }, 1000);
-};
+    if (TABLE_ID > 0) loadHistory();
 
-function completeInvoiceDownload() {
-    // Left intact for external calling, but the destruct function is removed.
- 
-    loadHistory(); 
-}
+    // FIX: Combined interval loops both general order statuses and individual table tracking every 3 seconds live
+    setInterval(() => {
+        loadOrders();
+        if (TABLE_ID > 0) loadHistory();
+    }, 3000);
+
+    setInterval(transmitKitchenHeartbeat, 2000);
+};
