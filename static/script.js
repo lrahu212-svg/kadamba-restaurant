@@ -8,6 +8,9 @@ const TABLE_ID = parseInt(document.body.getAttribute("data-table")) || 0;
 const IS_WAITER_PAGE = document.body.getAttribute("data-page") === "waiter";
 const KITCHEN_ID_TARGET = parseInt(document.body.getAttribute("data-kitchen")) || 0;
 
+// Retrieve saved device configuration from local system tracking
+let savedPrinterName = localStorage.getItem("kitchen_printer_name") || "";
+
 function verifyUserSession() {
     if (TABLE_ID === 0) return; 
     let welcomeBox = document.getElementById("welcomeModal");
@@ -312,7 +315,6 @@ function printTableInvoiceAndClear() {
     });
     localStorage.setItem('invoiced_order_ids', JSON.stringify(invoicedIDs));
 
-    // Empty the local active cart/orders but KEEP customerName and customerPhone intact
     cart = [];
     currentActiveOrders = [];
     renderCart();
@@ -349,6 +351,95 @@ function serveSingleFoodItem(orderId, itemName) {
     });
 }
 
+// --- UPGRADE: AUTOMATIC BACKGROUND HARDWARE EMISSION ---
+function autoPrintToLaptopPrinter(order) {
+    if (!savedPrinterName) return; 
+    
+    let printedIDs = JSON.parse(localStorage.getItem('printed_kitchen_order_ids')) || [];
+    if (printedIDs.includes(order.id)) return; 
+
+    printedIDs.push(order.id);
+    localStorage.setItem('printed_kitchen_order_ids', JSON.stringify(printedIDs));
+
+    let lines = [];
+    lines.push("================================");
+    lines.push("       🔥 KITCHEN ORDER 🔥      ");
+    lines.push("================================");
+    lines.push(`TOKEN NO  : #0${order.id}`);
+    lines.push(`TABLE NO  : TABLE ${order.table_id}`);
+    lines.push(`Time      : ${order.timestamp}`);
+    lines.push(`Customer  : ${order.customer_name.toUpperCase()}`);
+    lines.push("--------------------------------");
+    
+    order.items.forEach(item => {
+        let qty = item.pending_qty !== undefined ? item.pending_qty : item.qty;
+        if (qty > 0) {
+            lines.push(`• ${item.name.padEnd(20)} x${qty}`);
+        }
+    });
+    
+    lines.push("--------------------------------");
+    lines.push("\n\n\n"); 
+
+    let printPayload = lines.join("\n");
+
+    fetch('/print_to_laptop_printer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            printer_name: savedPrinterName, 
+            text: printPayload 
+        })
+    })
+    .then(r => r.json())
+    .then(res => console.log("System Queue Response:", res))
+    .catch(err => console.error("System Hardware Routing Error: ", err));
+}
+
+// --- UPGRADE: PRINTER DROPDOWN ON KITCHEN SCREENS ---
+function setupLaptopPrinterUI() {
+    if (document.getElementById("printerConfigContainer") || IS_WAITER_PAGE || TABLE_ID > 0) return;
+
+    let header = document.querySelector("header") || document.body;
+    let configDiv = document.createElement("div");
+    configDiv.id = "printerConfigContainer";
+    configDiv.style.cssText = "background:#222; padding:10px; display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:2px solid #C5A059;";
+    configDiv.innerHTML = `
+        <span style="color:#C5A059; font-weight:bold; font-size:13px;">🖨️ Active Kitchen Printer:</span>
+        <select id="printerSelectDropdown" style="padding:5px; border-radius:4px; border:1px solid #C5A059; background:#111; color:#fff; width:210px; cursor:pointer;">
+            <option value="">Scanning laptop connected devices...</option>
+        </select>
+        <button onclick="saveSelectedPrinter()" style="background:#C5A059; color:#000; border:none; padding:5px 12px; font-weight:bold; border-radius:4px; cursor:pointer;">Link Device</button>
+    `;
+    header.prepend(configDiv);
+
+    fetch('/get_printers')
+        .then(r => r.json())
+        .then(data => {
+            let dropdown = document.getElementById("printerSelectDropdown");
+            dropdown.innerHTML = '<option value="">-- Choose System Printer --</option>';
+            let list = data.printers || [];
+            list.forEach(p => {
+                let isSelected = p === savedPrinterName ? "selected" : "";
+                dropdown.innerHTML += `<option value="${p}" ${isSelected}>${p}</option>`;
+            });
+        })
+        .catch(() => {
+            document.getElementById("printerSelectDropdown").innerHTML = '<option value="">Failed to scan drivers</option>';
+        });
+}
+
+function saveSelectedPrinter() {
+    let selectVal = document.getElementById("printerSelectDropdown").value;
+    if (selectVal) {
+        savedPrinterName = selectVal;
+        localStorage.setItem("kitchen_printer_name", savedPrinterName);
+        showToast("System Hardware Link Secured! 🖨️");
+    } else {
+        alert("Please select a device from the list.");
+    }
+}
+
 function loadOrders() {
     let kitchenGrid = document.getElementById("kitchenGrid");
     let waiterBox = document.getElementById("waiterActiveQueue");
@@ -358,6 +449,13 @@ function loadOrders() {
     fetch('/get_orders').then(r => r.json()).then(payload => {
         let allOrders = payload.orders || [];
         let isKitchen2Online = payload.kitchen2_active;
+
+        // Reset printing tracker safe window if master reset triggered by owner
+        let maxBackendID = allOrders.length > 0 ? Math.max(...allOrders.map(o => o.id)) : 0;
+        let printedKitchenIDs = JSON.parse(localStorage.getItem('printed_kitchen_order_ids')) || [];
+        if (printedKitchenIDs.length > 0 && maxBackendID < Math.max(...printedKitchenIDs)) {
+            localStorage.setItem('printed_kitchen_order_ids', JSON.stringify([]));
+        }
 
         if (IS_WAITER_PAGE) {
             let unserved = allOrders.filter(o => o.status !== "Served" && o.status !== "Paid");
@@ -419,32 +517,6 @@ function loadOrders() {
         }
 
         if (kitchenGrid) {
-            // --- AUTOMATIC KITCHEN INCOMING ORDER SILENT PRINT TRIGGER ---
-            let currentMaxId = allOrders.length > 0 ? Math.max(...allOrders.map(o => o.id)) : 0;
-            if (typeof window.lastPrintedOrderId === 'undefined') {
-                window.lastPrintedOrderId = currentMaxId; 
-            } else if (currentMaxId > window.lastPrintedOrderId) {
-                let newOrders = allOrders.filter(o => o.id > window.lastPrintedOrderId);
-                newOrders.forEach(o => {
-                    let belongsToKitchen = false;
-                    if (KITCHEN_ID_TARGET === 1) {
-                        if (!isKitchen2Online) {
-                            belongsToKitchen = true;
-                        } else {
-                            belongsToKitchen = (o.kitchen_id === 1);
-                        }
-                    } else if (KITCHEN_ID_TARGET === 2) {
-                        belongsToKitchen = (o.kitchen_id === 2);
-                    }
-                    
-                    if (belongsToKitchen && o.status !== "Served" && o.status !== "Paid") {
-                        triggerAutomaticPrint(o);
-                    }
-                });
-                window.lastPrintedOrderId = currentMaxId;
-            }
-            // --- END AUTOMATIC PRINT ENGINE ---
-
             let targetQueue = [];
             
             if (KITCHEN_ID_TARGET === 1) {
@@ -517,9 +589,21 @@ function loadOrders() {
                             <div class="items-list">${itemsSummary}</div>
                             <div class="meta-text">👤 Client: ${o.customer_name.toUpperCase()} | Token: #0${o.id}</div>
                         `;
+                        
+                        // Fire auto-print sequence to the selected laptop printer name
+                        autoPrintToLaptopPrinter(o);
                     }
                 }
             }
+        }
+    });
+}
+
+function updateLiveTimers() {
+    document.querySelectorAll(".timer-large").forEach(timer => {
+        let startTimeMs = parseInt(timer.getAttribute("data-start"));
+        if (startTimeMs && !isNaN(startTimeMs)) {
+            timer.innerText = calculateDurationText(startTimeMs);
         }
     });
 }
@@ -543,131 +627,6 @@ function filterMenu() {
     });
 }
 
-// --- HARDWARE PRINTER LOGIC ADDITION ---
-let selectedPrinterType = localStorage.getItem("kitchen_printer_type") || "none";
-let savedWifiIP = localStorage.getItem("kitchen_printer_wifi_ip") || "";
-let connectedUsbDevice = null;
-let connectedBtCharacteristic = null;
-
-function changePrinterSetup() {
-    let select = document.getElementById("printerTypeSelect");
-    if (!select) return;
-    selectedPrinterType = select.value;
-    localStorage.setItem("kitchen_printer_type", selectedPrinterType);
-    
-    let connectBtn = document.getElementById("printerConnectBtn");
-    let statusText = document.getElementById("printerStatusText");
-    
-    if (selectedPrinterType === "none") {
-        connectBtn.style.display = "none"; // TYPO FIXED HERE
-        statusText.innerText = "";
-    } else if (selectedPrinterType === "wifi") {
-        connectBtn.style.display = "inline-block";
-        connectBtn.innerText = "Setup IP";
-        statusText.innerText = savedWifiIP ? `IP: ${savedWifiIP}` : "IP Not Set";
-    } else {
-        connectBtn.style.display = "inline-block";
-        connectBtn.innerText = "Pair Device";
-        statusText.innerText = "Disconnected";
-    }
-}
-
-async function actionConnectPrinter() {
-    let statusText = document.getElementById("printerStatusText");
-    if (selectedPrinterType === "wifi") {
-        let ip = prompt("Enter the Wi-Fi Thermal Printer IP Address (e.g., 192.168.1.100):", savedWifiIP);
-        if (ip) {
-            savedWifiIP = ip.trim();
-            localStorage.setItem("kitchen_printer_wifi_ip", savedWifiIP);
-            statusText.innerText = `IP: ${savedWifiIP}`;
-        }
-    } 
-    else if (selectedPrinterType === "usb") {
-        try {
-            statusText.innerText = "Pairing...";
-            connectedUsbDevice = await navigator.usb.requestDevice({ filters: [] });
-            await connectedUsbDevice.open();
-            if (connectedUsbDevice.configuration === null) {
-                await connectedUsbDevice.selectConfiguration(1);
-            }
-            await connectedUsbDevice.claimInterface(0);
-            statusText.innerText = "🟢 USB Connected";
-        } catch (e) {
-            statusText.innerText = "🔴 Pair Failed";
-            console.error(e);
-        }
-    } 
-    else if (selectedPrinterType === "bluetooth") {
-        try {
-            statusText.innerText = "Pairing...";
-            let device = await navigator.bluetooth.requestDevice({
-                acceptAllDevices: true,
-                optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
-            });
-            let server = await device.gatt.connect();
-            let service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
-            let characteristics = await service.getCharacteristics();
-            let writeChar = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse);
-            if (writeChar) {
-                connectedBtCharacteristic = writeChar;
-                statusText.innerText = "🟢 BT Connected";
-            } else {
-                statusText.innerText = "🔴 Write Lock";
-            }
-        } catch (e) {
-            statusText.innerText = "🔴 Pair Failed";
-            console.error(e);
-        }
-    }
-}
-
-function initPrinterUIOnLoad() {
-    let select = document.getElementById("printerTypeSelect");
-    if (select) {
-        select.value = selectedPrinterType;
-        changePrinterSetup();
-    }
-}
-
-function generateReceiptText(order) {
-    let lines = [];
-    lines.push("================================");
-    lines.push(`       KITCHEN ORDER TICKET     `);
-    lines.push("================================");
-    lines.push(`Token: #0${order.id}`);
-    lines.push(`Table Num: Table ${order.table_id}`);
-    lines.push(`Time Received: ${order.timestamp}`);
-    lines.push(`Customer: ${order.customer_name}`);
-    lines.push("--------------------------------");
-    order.items.forEach(item => {
-        lines.push(`• ${item.name} x ${item.qty}`);
-    });
-    lines.push("--------------------------------");
-    lines.push("\n\n\n\n"); 
-    return lines.join("\n");
-}
-
-function triggerAutomaticPrint(order) {
-    if (selectedPrinterType === "none") return;
-    let textPayload = generateReceiptText(order);
-    
-    if (selectedPrinterType === "wifi" && savedWifiIP) {
-        fetch('/print_to_wifi', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ip: savedWifiIP, text: textPayload })
-        }).catch(err => console.error("Auto Network-Print Error: ", err));
-    } 
-    else if (selectedPrinterType === "usb" && connectedUsbDevice && connectedUsbDevice.opened) {
-        let encoder = new TextEncoder();
-        connectedUsbDevice.transferOut(1, encoder.encode(textPayload)).catch(err => console.error(err));
-    } 
-    else if (selectedPrinterType === "bluetooth" && connectedBtCharacteristic) {
-        let encoder = new TextEncoder();
-        connectedBtCharacteristic.writeValue(encoder.encode(textPayload)).catch(err => console.error(err));
-    }
-}
-
 window.onload = function() {
     let kitchenGrid = document.getElementById("kitchenGrid");
     if (kitchenGrid) {
@@ -678,7 +637,7 @@ window.onload = function() {
             slot.className = "kitchen-card-slot";
             kitchenGrid.appendChild(slot);
         }
-        initPrinterUIOnLoad();
+        setupLaptopPrinterUI(); 
     }
     verifyUserSession();
     loadOrders();
@@ -689,5 +648,6 @@ window.onload = function() {
     }
     
     setInterval(loadOrders, 3000);
+    setInterval(updateLiveTimers, 1000);
     setInterval(transmitKitchenHeartbeat, 2000);
 };

@@ -4,6 +4,12 @@ import json
 import os
 import time
 
+# Native Windows Printing API Integration
+try:
+    import win32print
+except ImportError:
+    win32print = None
+
 app = Flask(__name__)
 
 DB_FILE = "orders_session.json"
@@ -15,21 +21,14 @@ def load_persisted_db():
     try:
         with open(DB_FILE, "r") as f:
             data = json.load(f)
-            orders = data.get("orders", [])
-            counter = data.get("counter", 1)
-            routing_idx = data.get("routing_idx", 0)
-            return orders, counter, routing_idx
+            return data.get("orders", []), data.get("counter", 1), data.get("routing_idx", 0)
     except:
         return [], 1, 0
 
 def save_persisted_db(orders, counter, routing_idx):
     try:
         with open(DB_FILE, "w") as f:
-            json.dump({
-                "orders": orders,
-                "counter": counter,
-                "routing_idx": routing_idx
-            }, f, indent=4)
+            json.dump({"orders": orders, "counter": counter, "routing_idx": routing_idx}, f, indent=4)
     except Exception as e:
         print(f"File writing failure: {e}")
 
@@ -51,10 +50,49 @@ def kitchen_two_terminal():
 def waiter_terminal():
     return render_template('waiter.html')
 
-# NEW: Dedicated secure route for the Restaurant Owner
 @app.route('/owner')
 def owner_terminal():
     return render_template('owner.html')
+
+# Fetch all connected Wi-Fi & local printers installed on the Windows PC
+@app.route('/get_system_printers', methods=['GET'])
+def get_system_printers():
+    if not win32print:
+        return jsonify({"printers": ["Demo Printer (Win32 API Missing)"]})
+    try:
+        flags = win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
+        printers_info = win32print.EnumPrinters(flags, None, 4)
+        printer_names = [p['pPrinterName'] for p in printers_info]
+        return jsonify({"printers": printer_names})
+    except Exception as e:
+        return jsonify({"printers": [], "error": str(e)})
+
+# Send raw receipt block text to selected system printer
+@app.route('/send_to_printer', methods=['POST'])
+def send_to_printer():
+    if not win32print:
+        return jsonify({"success": False, "error": "Windows printing library missing"}), 500
+        
+    data = request.get_json()
+    target_printer = data.get('printer_name')
+    print_raw_text = data.get('text_receipt')
+    
+    if not target_printer or not print_raw_text:
+        return jsonify({"success": False, "error": "Missing printer name or receipt text"}), 400
+        
+    try:
+        hPrinter = win32print.OpenPrinter(target_printer)
+        try:
+            hJob = win32print.StartDocPrinter(hPrinter, 1, ("KOT Order Receipt", None, "TEXT"))
+            win32print.StartPagePrinter(hPrinter)
+            win32print.WritePrinter(hPrinter, print_raw_text.encode('utf-8'))
+            win32print.EndPagePrinter(hPrinter)
+            win32print.EndDocPrinter(hPrinter)
+        finally:
+            win32print.ClosePrinter(hPrinter)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/kitchen_ping', methods=['POST'])
 def kitchen_ping():
@@ -76,10 +114,7 @@ def place_order():
         
         is_kitchen2_active = (time.time() - kitchen_status[2]) < 7
         if is_kitchen2_active:
-            if (order_routing_index % 8) < 4:
-                assigned_kitchen = 1
-            else:
-                assigned_kitchen = 2
+            assigned_kitchen = 1 if (order_routing_index % 8) < 4 else 2
         else:
             assigned_kitchen = 1
             
@@ -109,26 +144,18 @@ def place_order():
         }
         
         orders_db.append(new_order)
-        
         order_id_counter += 1
         order_routing_index += 1
         save_persisted_db(orders_db, order_id_counter, order_routing_index)
         
-        return jsonify({"success": True, "token": new_order["id"], "kitchen": assigned_kitchen}), 201
+        return jsonify({"success": True, "token": new_order["id"]}), 201
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
 
 @app.route('/get_orders')
 def get_orders():
     is_kitchen2_active = (time.time() - kitchen_status[2]) < 7
-    return jsonify({
-        "orders": orders_db,
-        "kitchen2_active": is_kitchen2_active
-    })
-
-@app.route('/history')
-def order_history():
-    return jsonify(orders_db)
+    return jsonify({"orders": orders_db, "kitchen2_active": is_kitchen2_active})
 
 @app.route('/serve_item', methods=['POST'])
 def serve_item():
@@ -151,16 +178,13 @@ def serve_item():
                     now_ms = int(datetime.now().timestamp() * 1000)
                     order['served_at_timestamp'] = now_ms
                     diff_seconds = int((now_ms - order['placed_at_timestamp']) / 1000)
-                    if diff_seconds < 60:
-                        order['duration_string'] = f"{diff_seconds} sec"
-                    else:
-                        order['duration_string'] = f"{diff_seconds // 60} min {diff_seconds % 60} sec"
+                    order['duration_string'] = f"{diff_seconds} sec" if diff_seconds < 60 else f"{diff_seconds // 60} min {diff_seconds % 60} sec"
                 
                 save_persisted_db(orders_db, order_id_counter, order_routing_index)
                 return jsonify({"success": True}), 200
-        return jsonify({"success": False, "error": "Order or Item not found"}), 404
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 400
+        return jsonify({"success": False}), 404
+    except:
+        return jsonify({"success": False}), 400
 
 @app.route('/update_status', methods=['POST'])
 def update_status():
@@ -176,48 +200,16 @@ def update_status():
                 if target_status == "Served":
                     for item in order['items']:
                         item['pending_qty'] = 0
-                        
                     if not order['served_at_timestamp']:
                         now_ms = int(datetime.now().timestamp() * 1000)
                         order['served_at_timestamp'] = now_ms
                         diff_seconds = int((now_ms - order['placed_at_timestamp']) / 1000)
-                        if diff_seconds < 60:
-                            order['duration_string'] = f"{diff_seconds} sec"
-                        else:
-                            order['duration_string'] = f"{diff_seconds // 60} min {diff_seconds % 60} sec"
-                        
+                        order['duration_string'] = f"{diff_seconds} sec" if diff_seconds < 60 else f"{diff_seconds // 60} min {diff_seconds % 60} sec"
                 save_persisted_db(orders_db, order_id_counter, order_routing_index)
                 return jsonify({"success": True}), 200
         return jsonify({"success": False}), 404
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 400
-
-@app.route('/clear_day_logs', methods=['POST'])
-def clear_day_logs():
-    global orders_db, order_id_counter, order_routing_index
-    payload_backup = list(orders_db)
-    orders_db = []
-    order_id_counter = 1
-    order_routing_index = 0
-    save_persisted_db(orders_db, order_id_counter, order_routing_index)
-    return jsonify({"success": True, "archive": payload_backup})
-
-# NEW ADDITION: Network socket router for silent Wi-Fi direct printing bypasses browser CORS limits
-@app.route('/print_to_wifi', methods=['POST'])
-def print_to_wifi():
-    try:
-        data = request.get_json()
-        printer_ip = data.get('ip')
-        text_content = data.get('text')
-        import socket
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(3.0)
-        s.connect((printer_ip, 9100)) # Standard network thermal printer port
-        s.sendall(text_content.encode('utf-8'))
-        s.close()
-        return jsonify({"success": True}), 200
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 200
+    except:
+        return jsonify({"success": False}), 400
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
