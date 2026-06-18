@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Management Owner Dashboard</title>
+    <style>
+        body { font-family: sans-serif; background: #111; color: #fff; padding: 25px; margin: 0; }
+        .dashboard-header { border-bottom: 2px dashed #C5A059; padding-bottom: 15px; margin-bottom: 25px; }
+        .btn-wipe-archive { background: #e74c3c; color: white; font-size: 16px; font-weight: bold; padding: 15px 25px; border: none; border-radius: 6px; cursor: pointer; display: block; width: 100%; max-width: 450px; margin: 25px 0; box-shadow: 0 4px 15px rgba(231,76,60,0.3); }
+        .btn-wipe-archive:hover { background: #c0392b; }
+        .served-history-container { background: #1c1c1c; padding: 15px; border-radius: 8px; border: 1px solid #333; max-width: 850px; }
+        .order-row { padding: 12px; border-bottom: 1px solid #2d2d2d; display: flex; justify-content: space-between; align-items: center; }
+        .order-row:last-child { border-bottom: none; }
+        .badge-served { background: #27ae60; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard-header">
+        <h1 style="color: #C5A059; margin: 0; font-size: 28px; letter-spacing: 1px;">OWNER CONTROL PANEL</h1>
+        <p style="color: #888; margin: 5px 0 0 0;">Secure Sales Audits & Shift Report Desk</p>
+    </div>
+
+    <h3>⚠️ End of Shift Operations</h3>
+    <p style="color: #aaa; font-size: 14px; max-width: 700px; line-height: 1.5;">
+        Clicking the action button below compiles a printable Master Report PDF containing all served transactions recorded during this session along with total revenue metrics, and instantly resets the system memory for the next loop.
+    </p>
+    
+    <button class="btn-wipe-archive" onclick="generateArchivePDFAndClearData()">
+        🖨️ DOWNLOAD REPORT & WIPE SALES DATABASE
+    </button>
+
+    <h3 style="color: #C5A059; margin-top: 40px;">📋 Served Items Live Audit Feed</h3>
+    <div class="served-history-container" id="ownerHistoryFeed">
+        <p style="color: #666; font-style: italic;">Querying live database history blocks...</p>
+    </div>
+
+    <script>
+        function loadOwnerFeed() {
+            fetch('/history')
+            .then(r => r.json())
+            .then(orders => {
+                let box = document.getElementById("ownerHistoryFeed");
+                let servedOrders = orders.filter(o => o.status === "Served");
+
+                if(servedOrders.length === 0) {
+                    box.innerHTML = '<p style="color: #666; padding: 15px; margin: 0; text-align: center;">No completely served items inside active database logs.</p>';
+                    return;
+                }
+                
+                box.innerHTML = "";
+                
+                servedOrders.forEach(o => {
+                    // Compute unique order total for the row item audit line
+                    let orderTotal = o.items.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.qty)), 0);
+                    let itemsStr = o.items.map(i => `${i.name} (x${i.qty})`).join(", ");
+                    
+                    let div = document.createElement("div");
+                    div.className = "order-row";
+                    div.innerHTML = `
+                        <div>
+                            <strong style="font-size:16px; color:#fff;">Token #0${o.id} &mdash; Table ${o.table_id}</strong>
+                            <div style="color: #aaa; font-size: 13px; margin-top: 4px;">Items: ${itemsStr}</div>
+                            <small style="color: #666;">Placed at: ${o.timestamp} | Served Speed: ${o.duration_string || 'N/A'}</small>
+                        </div>
+                        <div style="text-align: right;">
+                            <span class="badge-served" style="display: block; margin-bottom: 4px;">Rs. ${orderTotal}</span>
+                            <small style="color: #27ae60; font-weight: bold;">PAID</small>
+                        </div>
+                    `;
+                    box.appendChild(div);
+                });
+            });
+        }
+
+        function generateArchivePDFAndClearData() {
+            const doubleCheck = confirm("⚠️ DATABASE WIPE WARNING!\n\nAre you sure you want to download the master report and completely wipe out the system logs?");
+            if (!doubleCheck) return;
+
+            fetch('/clear_day_logs', { method: 'POST' })
+            .then(r => r.json())
+            .then(response => {
+                if (!response.success) { alert("Server verification failed."); return; }
+                
+                let targetLogArray = response.archive || [];
+                let servedLogs = targetLogArray.filter(o => o.status === "Served");
+                
+                if (servedLogs.length === 0) {
+                    alert("The log contains no served entries. No backup document generated.");
+                    window.location.reload();
+                    return;
+                }
+
+                let printWindow = window.open('', '_blank');
+                let grandTotalEarnings = 0;
+                let reportHTML = `<html>
+                <head>
+                    <title>Master Sales Report Summary</title>
+                    <style>
+                        body { font-family: monospace; padding: 30px; color: #000; background: #fff; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                        th, td { border: 1px solid #000; padding: 10px; text-align: left; }
+                        th { background: #e0e0e0; }
+                    </style>
+                </head>
+                <body>
+                    <h2>MASTER SALES & DISPATCH ARCHIVE REPORT</h2>
+                    <p>Report Compiled Date: ${new Date().toLocaleDateString()} @ ${new Date().toLocaleTimeString()}</p>
+                    <hr>
+                    <table>
+                        <thead>
+                            <tr><th>Token</th><th>Table Num</th><th>Served Food Breakdown Summary</th><th>Amount Collected</th></tr>
+                        </thead>
+                        <tbody>`;
+
+                servedLogs.forEach(o => {
+                    let orderTotal = o.items.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.qty)), 0);
+                    grandTotalEarnings += orderTotal;
+                    
+                    let itemLines = o.items.map(i => `${i.name} x${i.qty}`).join(", ");
+                    reportHTML += `<tr><td>#0${o.id}</td><td>Table ${o.table_id}</td><td>${itemLines}</td><td>Rs. ${orderTotal}</td></tr>`;
+                });
+
+                reportHTML += `</tbody></table>
+                <h3 style="text-align: right; margin-top: 25px; font-size: 20px; font-weight: bold; border-top: 2px solid #000; padding-top: 10px;">GRAND TOTAL REVENUE: Rs. ${grandTotalEarnings}</h3>
+                <script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }<\/script>
+                </body></html>`;
+
+                printWindow.document.write(reportHTML);
+                printWindow.document.close();
+                alert("Database cleaned successfully. Print layout dispatched!");
+                loadOwnerFeed();
+            });
+        }
+
+        loadOwnerFeed();
+        setInterval(loadOwnerFeed, 4000);
+    </script>
+</body>
+</html>

@@ -172,10 +172,26 @@ function loadHistory() {
         return;
     }
 
-    fetch(`/get_table_orders/${TABLE_ID}`)
+    fetch(`/get_orders`) 
     .then(r => r.json())
     .then(res => {
-        let activeOrders = res.orders || [];
+        let allOrders = res.orders || [];
+        
+        // Safety Clean: If owner wiped database logs, reset local view storage lists
+        let maxBackendID = allOrders.length > 0 ? Math.max(...allOrders.map(o => o.id)) : 0;
+        let invoicedIDs = JSON.parse(localStorage.getItem('invoiced_order_ids')) || [];
+        if (invoicedIDs.length > 0 && maxBackendID < Math.max(...invoicedIDs)) {
+            invoicedIDs = [];
+            localStorage.setItem('invoiced_order_ids', JSON.stringify([]));
+        }
+
+        // Exclude orders flagged locally as invoiced on this client browser
+        let activeOrders = allOrders.filter(o => 
+            o.table_id === TABLE_ID && 
+            o.customer_phone === customerPhone && 
+            o.status !== "Paid" &&
+            !invoicedIDs.includes(o.id)
+        );
         currentActiveOrders = activeOrders; 
         
         if (activeOrders.length === 0) {
@@ -184,17 +200,17 @@ function loadHistory() {
         }
 
         box.innerHTML = "";
-        let allOrdersServed = true; 
+        let allOrdersServed = true;
 
         activeOrders.forEach(o => {
-            let summary = o.items.map(i => `${i.name} (${i.qty})`).join(", ");
-            let statusClass = o.status.toLowerCase(); 
-            let durationLabel = o.status === "Served" ? `<span style="color:#2ecc71; font-weight:bold; display:block; margin-top:4px;">⏱️ Served in ${o.duration_string || 'N/A'}</span>` : '';
-
             if (o.status !== "Served") {
                 allOrdersServed = false;
             }
-
+            
+            let summary = o.items.map(i => `${i.name} (${i.qty})`).join(", ");
+            let statusClass = o.status.toLowerCase(); 
+            let durationLabel = o.status === "Served" ? `<span style="color:#2ecc71; font-weight:bold; display:block; margin-top:4px;">⏱️ Served in ${o.duration_string || 'N/A'}</span>` : '';
+            
             let div = document.createElement("div");
             div.className = "order-card";
             div.style.marginBottom = "10px";
@@ -207,154 +223,102 @@ function loadHistory() {
             box.appendChild(div);
         });
 
-        if (activeOrders.length > 0) {
-            let combinedBtnDiv = document.createElement("div");
-            combinedBtnDiv.style.cssText = "margin-top: 20px; padding-top: 15px; border-top: 2px dashed #C5A059;";
-            
-            if (allOrdersServed) {
-                combinedBtnDiv.innerHTML = `
-                    <button onclick="generateCombinedCustomerInvoicePDF()" style="width:100%; background:#C5A059; color:#231F20; border:2px solid #231F20; padding:12px; font-weight:bold; font-size:14px; border-radius:6px; cursor:pointer; box-shadow: 0px 4px 6px rgba(0,0,0,0.1);">
-                        🖨️ PRINT ALL ORDERS COMBINED BILL
-                    </button>
-                `;
-            } else {
-                combinedBtnDiv.innerHTML = `
-                    <div style="background:#f1f2f6; border:1px solid #ced6e0; padding:10px; border-radius:6px; text-align:center; font-size:12px; color:#57606f; font-weight:600;">
-                        🔒 Bill compilation locked. Available after all food items are served.
-                    </div>
-                `;
-            }
-            box.appendChild(combinedBtnDiv);
+        let masterBtnDiv = document.createElement("div");
+        masterBtnDiv.style.marginTop = "20px";
+        masterBtnDiv.style.paddingTop = "15px";
+        masterBtnDiv.style.borderTop = "2px dashed #C5A059";
+        
+        if (allOrdersServed) {
+            masterBtnDiv.innerHTML = `
+                <button onclick="printTableInvoiceAndClear()" style="width: 100%; padding: 15px; background: #C5A059; color: #111; border: none; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 14px; box-shadow: 0 4px 10px rgba(197, 160, 89, 0.3);">
+                    🧾 DOWNLOAD MASTER INVOICE & CLEAR TABLE
+                </button>
+            `;
+        } else {
+            masterBtnDiv.innerHTML = `
+                <div style="background:#f1f2f6; border:1px solid #ced6e0; padding:12px; border-radius:6px; text-align:center; font-size:12px; color:#57606f; font-weight:600;">
+                    🔒 Bill downloading is locked. Available once all items are served.
+                </div>
+            `;
         }
+        box.appendChild(masterBtnDiv);
     });
 }
 
-function generateCombinedCustomerInvoicePDF() {
-    if (currentActiveOrders.length === 0) { alert("No order items available to compute."); return; }
+function printTableInvoiceAndClear() {
+    if (currentActiveOrders.length === 0) return;
 
-    fetch(`/download_invoice/${TABLE_ID}`, { method: 'POST' })
-    .then(r => r.json())
-    .then(res => {
-        if (!res.success) { alert("Server failed to process bill compilation hook."); return; }
+    let invoiceWindow = window.open('', '_blank');
+    let grandTotal = 0;
+    let allItems = [];
 
-        let ordersToPrint = res.invoice_data || [];
-        let invoiceWindow = window.open('', '_blank');
-        let combinedItemsMap = {};
-        let grandRunningSum = 0;
-
-        ordersToPrint.forEach(order => {
-            order.items.forEach(item => {
-                if (combinedItemsMap[item.name]) {
-                    combinedItemsMap[item.name].qty += parseInt(item.qty);
-                } else {
-                    combinedItemsMap[item.name] = {
-                        price: parseFloat(item.price),
-                        qty: parseInt(item.qty)
-                    };
-                }
-            });
+    currentActiveOrders.forEach(o => {
+        o.items.forEach(i => {
+            allItems.push(i);
+            grandTotal += (parseFloat(i.price) * parseInt(i.qty));
         });
-
-        let linesHTML = Object.keys(combinedItemsMap).map(itemName => {
-            let details = combinedItemsMap[itemName];
-            let sub = details.price * details.qty;
-            grandRunningSum += sub;
-            return `
-                <tr>
-                    <td style="padding: 5px 0;">${itemName}<br><small>${details.qty} x Rs. ${details.price}</small></td>
-                    <td style="text-align: right; vertical-align: bottom; padding: 5px 0;">Rs. ${sub.toFixed(2)}</td>
-                </tr>`;
-        }).join("");
-
-        let currentSystemTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        buildThermalHTMLTemplate(invoiceWindow, `Combined_Final_Bill`, `FINAL COMBINED RECEIPT`, currentSystemTime, linesHTML, grandRunningSum);
-
-        currentActiveOrders = [];
-        setTimeout(loadHistory, 300);
     });
-}
-
-function buildThermalHTMLTemplate(winObj, docTitle, invoiceScopeLabel, timestampStr, itemsLinesHTML, netAmountValue) {
-    let thermalHTML = `
-    <html>
+    
+    let html = `<html>
     <head>
-        <title>Receipt_${docTitle}</title>
+        <title>Table ${TABLE_ID} Master Invoice</title>
         <style>
-            @page { size: 80mm auto; margin: 0; }
-            body { 
-                font-family: 'Courier New', Courier, monospace; 
-                width: 72mm; 
-                margin: 0 auto; 
-                padding: 10px 0; 
-                color: #000; 
-                background: #fff; 
-                font-size: 13px; 
-                line-height: 1.3;
-            }
+            body { font-family: monospace; padding: 20px; color: #000; background: #fff; max-width: 300px; margin: 0 auto; }
             .center { text-align: center; }
-            .bold { font-weight: bold; }
-            .divider { border-top: 1px dashed #000; margin: 8px 0; }
-            table { width: 100%; border-collapse: collapse; }
-            @media print { .no-print { display: none; } }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { padding: 5px 0; text-align: left; font-size: 13px; }
+            .text-right { text-align: right; }
+            .line { border-top: 1px dashed #000; margin: 10px 0; }
         </style>
     </head>
     <body>
-        <div class="no-print" style="background:#231F20; color:#C5A059; padding:8px; font-family:sans-serif; text-align:center; font-size:11px; font-weight:bold; margin-bottom:10px;">
-            🖨️ Thermal Layout: Click print or save as PDF
-        </div>
-        <div class="center">
-            <h2 style="margin: 0 0 5px 0; font-size: 18px; text-transform: uppercase;">WELCOME RESTAURANT</h2>
-            <p style="margin: 2px 0;">Digital Table Ordering Terminal</p>
-            <p style="margin: 2px 0; font-size: 11px;">Track Loop System Ledger Counter</p>
-        </div>
-        
-        <div class="divider"></div>
-        
-        <div>
-            <strong>SCOPE ID:</strong> ${invoiceScopeLabel}<br>
-            <strong>TABLE NUM:</strong> TABLE ${TABLE_ID}<br>
-            <strong>CUSTOMER:</strong> ${customerName.toUpperCase()}<br>
-            <strong>PHONE REF:</strong> ${customerPhone}<br>
-            <strong>DATE BLOCK:</strong> ${new Date().toLocaleDateString()}<br>
-            <strong>TIME REF:</strong> ${timestampStr}
-        </div>
-        
-        <div class="divider"></div>
-        
-        <table style="font-size: 12px;">
+        <h3 class="center">RESTAURANT RECEIPT</h3>
+        <p class="center">Table: ${TABLE_ID}</p>
+        <p>Date: ${new Date().toLocaleDateString()}<br>Time: ${new Date().toLocaleTimeString()}</p>
+        <p>Customer: ${customerName || 'Guest'}</p>
+        <div class="line"></div>
+        <table>
             <thead>
-                <th style="text-align: left; border-bottom: 1px solid #000; padding-bottom: 4px;">ITEM SUMMARY</th>
-                <th style="text-align: right; border-bottom: 1px solid #000; padding-bottom: 4px;">PRICE</th>
+                <tr><th>Item</th><th>Qty</th><th class="text-right">Price</th></tr>
             </thead>
-            <tbody>
-                ${itemsLinesHTML}
-            </tbody>
-        </table>
-        
-        <div class="divider"></div>
-        
-        <div style="display: flex; justify-content: space-between; font-size: 15px; font-weight: bold; padding: 4px 0;">
-            <span>NET GRAND TOTAL:</span>
-            <span>Rs. ${netAmountValue.toFixed(2)}</span>
-        </div>
-        
-        <div class="divider"></div>
-        
-        <div class="center" style="margin-top: 15px; font-size: 11px;">
-            <p style="margin: 2px 0; font-weight: bold;">THANK YOU FOR YOUR VISIT! 🙏</p>
-            <p style="margin: 5px 0 0 0; font-size: 9px; color: #555;">Processed via All-In-One Node Architecture</p>
-        </div>
+            <tbody>`;
 
+    allItems.forEach(i => {
+        html += `<tr><td>${i.name}</td><td>x${i.qty}</td><td class="text-right">Rs.${i.price * i.qty}</td></tr>`;
+    });
+
+    html += `</tbody></table>
+        <div class="line"></div>
+        <h4 class="text-right" style="margin: 5px 0;">GRAND TOTAL: Rs. ${grandTotal}</h4>
+        <div class="line"></div>
+        <p class="center" style="font-size: 11px;">Thank You! Visit Again 🙏</p>
         <script>
-            window.onload = function() {
-                setTimeout(function() { window.print(); }, 300);
+            window.onload = function() { 
+                setTimeout(function() { 
+                    window.print(); 
+                    window.close(); 
+                }, 300); 
             }
         <\/script>
-    </body>
-    </html>`;
+    </body></html>`;
 
-    winObj.document.write(thermalHTML);
-    winObj.document.close();
+    invoiceWindow.document.write(html);
+    invoiceWindow.document.close();
+
+    // Store order IDs to hide them locally from this client's view
+    let invoicedIDs = JSON.parse(localStorage.getItem('invoiced_order_ids')) || [];
+    currentActiveOrders.forEach(o => {
+        if (!invoicedIDs.includes(o.id)) invoicedIDs.push(o.id);
+    });
+    localStorage.setItem('invoiced_order_ids', JSON.stringify(invoicedIDs));
+
+    // CHANGED: Empty the local active cart/orders but KEEP customerName and customerPhone intact
+    cart = [];
+    currentActiveOrders = [];
+    renderCart();
+    
+    showToast("Invoice Generated & History Cleared! 🧾");
+    loadHistory(); // Updates history view to "No active orders found" instead of forcing user re-registration
 }
 
 function calculateDurationText(startTimeMs) {
@@ -374,115 +338,6 @@ function transmitKitchenHeartbeat() {
     }).catch(e => console.log("Ping error", e));
 }
 
-function generateArchivePDFAndClearData() {
-    const doubleCheck = confirm("⚠️ WARNING!\nYou are about to wipe out all active entries on the feed.\n\nClick OK to fetch data records, save your PDF invoice report, and clear the database.");
-    if (!doubleCheck) return;
-
-    fetch('/clear_day_logs', { method: 'POST' })
-    .then(r => r.json())
-    .then(response => {
-        if (!response.success) { alert("Server reject cleanup hook operation."); return; }
-        
-        let targetLogArray = response.archive || [];
-        if (targetLogArray.length === 0) {
-            alert("Database was completely clean. No offline logging document generated.");
-            window.location.reload();
-            return;
-        }
-
-        let printWindow = window.open('', '_blank');
-        
-        let reportHTML = `
-        <html>
-        <head>
-            <title>Master Food Service Report Summary</title>
-            <style>
-                body { font-family: Courier, monospace; padding: 30px; color: #000; background: #fff; }
-                .heading { text-align: center; border-bottom: 3px double #000; padding-bottom: 12px; margin-bottom: 25px; }
-                .report-meta { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 30px; background: #f5f5f5; padding: 10px; border: 1px solid #000; }
-                table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                th, td { border: 1px solid #000; padding: 10px; text-align: left; font-size: 13px; }
-                th { background: #e0e0e0; text-transform: uppercase; }
-                .total-row { font-weight: bold; font-size: 16px; background: #f9f9f9; }
-                @media print { .no-print { display: none; } }
-            </style>
-        </head>
-        <body>
-            <div class="no-print" style="background:#e74c3c; color:white; padding:12px; font-weight:bold; text-align:center; margin-bottom:20px; border-radius:5px; font-family:sans-serif;">
-                🖨️ Action Required: Save as PDF inside the print window or print hardcopy to save these cleared daily records.
-            </div>
-            <div class="heading">
-                <h1 style="margin:0; font-size:26px;">MASTER SALES & DISPATCH ARCHIVE REPORT</h1>
-                <p style="margin:5px 0 0 0; font-size:14px;">All-In-One Restaurant System Engine Logs</p>
-            </div>
-            <div class="report-meta">
-                <span><strong>Report Generation Date:</strong> ${new Date().toLocaleDateString()}</span>
-                <span><strong>Records count processed:</strong> ${targetLogArray.length} Orders</span>
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Token</th>
-                        <th>Table</th>
-                        <th>Customer Details</th>
-                        <th>Date & Time Block</th>
-                        <th>Kitchen ID</th>
-                        <th>Items Break-down Summary</th>
-                        <th>Total Val</th>
-                    </tr>
-                </thead>
-                <tbody>;`
-
-        let netGrandTotalRevenue = 0;
-
-        targetLogArray.forEach(o => {
-            let innerTotal = 0;
-            let itemLines = o.items.map(i => {
-                let s = i.price * i.qty;
-                innerTotal += s;
-                return `${i.name} x${i.qty} (@ Rs.${i.price})`;
-            }).join("<br>");
-
-            netGrandTotalRevenue += innerTotal;
-
-            reportHTML += `
-                <tr>
-                    <td>#0${o.id}</td>
-                    <td><strong>Table ${o.table_id}</strong></td>
-                    <td>${o.customer_name.toUpperCase()}<br><span style="font-size:11px; color:#555;">Ph: ${o.customer_phone}</span></td>
-                    <td>📅 ${o.date || 'N/A'}<br>🕒 ${o.timestamp}</td>
-                    <td>Station ${o.kitchen_id}</td>
-                    <td>${itemLines}</td>
-                    <td><strong>Rs. ${innerTotal}</strong></td>
-                </tr>`;
-        });
-
-        reportHTML += `
-                <tr class="total-row">
-                    <td colspan="6" style="text-align:right; padding-right:15px;">NET GRAND REVENUE RECOVERED VALUE:</td>
-                    <td>Rs. ${netGrandTotalRevenue}</td>
-                </tr>
-            </tbody>
-            </table>
-            <div style="margin-top:40px; text-align:center; font-size:12px; border-top:1px dashed #000; padding-top:10px;">
-                --- End of Saved Archive Log Ledger ---
-            </div>
-            <script>
-                window.onload = function() { 
-                    setTimeout(function() { window.print(); }, 500); 
-                }
-            <\/script>
-        </body>
-        </html>`;
-
-        printWindow.document.write(reportHTML);
-        printWindow.document.close();
-        
-        showToast("Database safely wiped. Archive PDF dispatched!");
-        setTimeout(() => { window.location.reload(); }, 1500);
-    });
-}
-
 function serveSingleFoodItem(orderId, itemName) {
     fetch('/serve_item', {
         method: 'POST',
@@ -497,7 +352,6 @@ function serveSingleFoodItem(orderId, itemName) {
 function loadOrders() {
     let kitchenGrid = document.getElementById("kitchenGrid");
     let waiterBox = document.getElementById("waiterActiveQueue");
-    let waiterHistoryBox = document.getElementById("waiterMasterHistoryLog");
     let headingTextNode = document.getElementById("stationHeadingText");
     let ordersPendingBadge = document.getElementById("ordersPendingCountText");
 
@@ -506,7 +360,7 @@ function loadOrders() {
         let isKitchen2Online = payload.kitchen2_active;
 
         if (IS_WAITER_PAGE) {
-            let unserved = allOrders.filter(o => o.status !== "Served");
+            let unserved = allOrders.filter(o => o.status !== "Served" && o.status !== "Paid");
             if (waiterBox) {
                 if (unserved.length === 0) {
                     waiterBox.innerHTML = '<p style="color:#888; padding:10px;">No incoming food requests require delivery right now.</p>';
@@ -520,15 +374,20 @@ function loadOrders() {
                             let itemPrice = parseFloat(i.price) || 0;
                             let itemQty = parseInt(i.qty) || 1;
                             let pendingQty = i.pending_qty !== undefined ? parseInt(i.pending_qty) : itemQty;
-                            let itemTotal = itemPrice * itemQty;
-                            orderTotal += itemTotal;
+                            
+                            let servedQty = itemQty - pendingQty;
+                            orderTotal += itemPrice * itemQty;
                             
                             if (pendingQty <= 0) return ""; 
                             validActiveRowsCount++;
 
-                            return `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; margin: 6px 0; font-size:14px; padding: 4px 0;">
-                                        <span>• <strong>${i.name}</strong> <span style="background:#e67e22; color:white; padding:1px 6px; border-radius:4px; font-weight:bold; font-size:12px; margin-left:4px;">x${pendingQty} left</span></span>
-                                        <button onclick="serveSingleFoodItem(${o.id}, '${i.name}')" style="padding:4px 8px; background:#27ae60; color:white; border:none; font-weight:bold; border-radius:4px; cursor:pointer; font-size:12px;">✔️ SERVE 1</button>
+                            return `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; margin: 8px 0; font-size:14px; padding: 4px 0; border-bottom:1px solid #f9f9f9;">
+                                        <span>
+                                            • <strong>${i.name}</strong> 
+                                            <span style="background:#27ae60; color:white; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:11px; margin-left:6px;">${servedQty} Served</span>
+                                            <span style="background:#e67e22; color:white; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:11px; margin-left:4px;">${pendingQty} Left</span>
+                                        </span>
+                                        <button onclick="serveSingleFoodItem(${o.id}, '${i.name}')" style="padding:4px 10px; background:#27ae60; color:white; border:none; font-weight:bold; border-radius:4px; cursor:pointer; font-size:12px;">✔️ SERVE 1</button>
                                     </div>`;
                         }).join("");
 
@@ -556,45 +415,6 @@ function loadOrders() {
                     });
                 }
             }
-
-            if (waiterHistoryBox) {
-                let served = allOrders.filter(o => o.status === "Served");
-                if (served.length === 0) {
-                    waiterHistoryBox.innerHTML = '<p style="color:#888; padding:10px;">No historical orders archived for this loop period.</p>';
-                } else {
-                    waiterHistoryBox.innerHTML = "";
-                    served.slice().reverse().forEach(o => {
-                        let orderTotal = 0;
-                        let itemsHtml = o.items.map(i => {
-                            let itemPrice = parseFloat(i.price) || 0;
-                            let itemQty = parseInt(i.qty) || 1;
-                            let itemTotal = itemPrice * itemQty;
-                            orderTotal += itemTotal;
-                            
-                            return `<div class="item-row" style="display:flex; justify-content:space-between; font-size:13px; color:#555;">
-                                        <span>• ${i.name} x ${itemQty}</span>
-                                        <span>Rs. ${itemTotal}</span>
-                                    </div>`;
-                        }).join("");
-
-                        let div = document.createElement("div");
-                        div.className = "waiter-card served-card";
-                        div.innerHTML = `
-                            <div>
-                                <span class="badge-station" style="background:#27ae60;">SERVED</span>
-                                <h3 style="margin:0; color:#27ae60;">TABLE ${o.table_id}</h3>
-                                <div class="meta-line">👤 ${o.customer_name.toUpperCase()} | Token #0${o.id}<br>🕒 Placed: ${o.date || ''} @ ${o.timestamp}</div>
-                                <div style="margin:10px 0; border-top:1px solid #f5f5f5; border-bottom:1px solid #f5f5f5; padding:4px 0;">${itemsHtml}</div>
-                                <div style="text-align:right; font-weight:bold; margin: 4px 0; font-size:15px; color:#27ae60;">Paid Total: Rs. ${orderTotal}</div>
-                            </div>
-                            <div style="font-weight:bold; color:#27ae60; font-size:13px; border-top:1px dashed #ccc; padding-top:8px; margin-top:5px;">
-                                ⏱️ Performance Speed: ${o.duration_string || 'N/A'}
-                            </div>
-                        `;
-                        waiterHistoryBox.appendChild(div);
-                    });
-                }
-            }
             return;
         }
 
@@ -603,14 +423,14 @@ function loadOrders() {
             
             if (KITCHEN_ID_TARGET === 1) {
                 if (!isKitchen2Online) {
-                    targetQueue = allOrders.filter(o => o.status !== "Served");
+                    targetQueue = allOrders.filter(o => o.status !== "Served" && o.status !== "Paid");
                     if (headingTextNode) headingTextNode.innerText = "KITCHEN 1 (ALL-IN-ONE)";
                 } else {
-                    targetQueue = allOrders.filter(o => o.status !== "Served" && o.kitchen_id === 1);
+                    targetQueue = allOrders.filter(o => o.status !== "Served" && o.status !== "Paid" && o.kitchen_id === 1);
                     if (headingTextNode) headingTextNode.innerText = "KITCHEN 1";
                 }
             } else if (KITCHEN_ID_TARGET === 2) {
-                targetQueue = allOrders.filter(o => o.status !== "Served" && o.kitchen_id === 2);
+                targetQueue = allOrders.filter(o => o.status !== "Served" && o.status !== "Paid" && o.kitchen_id === 2);
                 if (headingTextNode) headingTextNode.innerText = "KITCHEN 2";
             }
 
@@ -710,13 +530,12 @@ window.onload = function() {
     }
     verifyUserSession();
     loadOrders();
-    if (TABLE_ID > 0) loadHistory();
-
-    // FIX: Combined interval loops both general order statuses and individual table tracking every 3 seconds live
-    setInterval(() => {
-        loadOrders();
-        if (TABLE_ID > 0) loadHistory();
-    }, 3000);
-
+    
+    if (TABLE_ID > 0) {
+        loadHistory();
+        setInterval(loadHistory, 3000); 
+    }
+    
+    setInterval(loadOrders, 3000);
     setInterval(transmitKitchenHeartbeat, 2000);
 };

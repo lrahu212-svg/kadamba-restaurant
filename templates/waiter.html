@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WAITER CONTROL DASHBOARD</title>
@@ -17,7 +16,7 @@
         .queue-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         .waiter-card { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.2s ease; }
         .active-card { border-top: 5px solid #e67e22; }
-        .served-card { border-top: 5px solid #27ae60; background: #f9fff9; opacity: 0.9; }
+        .served-card { border-top: 5px solid #939393; background: #f9fff9; opacity: 0.9; }
         
         .badge-station { display: inline-block; background: #34495e; color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
         .meta-line { font-size: 13px; color: #7f8c8d; line-height: 1.4; }
@@ -77,7 +76,6 @@
     <h1>
         <span>📋 Waiter Operations Dashboard</span>
         <div class="header-controls">
-            <button class="btn-clear-system" onclick="generateArchivePDFAndClearData()">⚠️ WIPE DATABASE & SAVE ARCHIVE PDF</button>
             <span class="sync-badge">Live Feed Auto-Syncing</span>
         </div>
     </h1>
@@ -90,13 +88,6 @@
             </div>
         </div>
 
-        <div class="section-box">
-            <div class="section-title" style="border-left-color: #27ae60;">Completed Loop Logs (Served Orders)</div>
-            <div id="waiterMasterHistoryLog" class="history-stack">
-                <p style="color:#888; padding:10px;">Loading historical index logs...</p>
-            </div>
-        </div>
-    </div>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>

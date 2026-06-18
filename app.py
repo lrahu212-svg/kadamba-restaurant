@@ -51,6 +51,11 @@ def kitchen_two_terminal():
 def waiter_terminal():
     return render_template('waiter.html')
 
+# NEW: Dedicated secure route for the Restaurant Owner
+@app.route('/owner')
+def owner_terminal():
+    return render_template('owner.html')
+
 @app.route('/kitchen_ping', methods=['POST'])
 def kitchen_ping():
     try:
@@ -84,7 +89,7 @@ def place_order():
             processed_items.append({
                 "name": item.get('name'),
                 "qty": qty,
-                "pending_qty": qty,  # TRACKS REMAINING COUNT TO SERVE
+                "pending_qty": qty,  
                 "price": float(item.get('price', 0))
             })
             
@@ -121,12 +126,6 @@ def get_orders():
         "kitchen2_active": is_kitchen2_active
     })
 
-# RESTORED: Fetch live prep status filtering by specific table
-@app.route('/get_table_orders/<int:table_id>')
-def get_table_orders(table_id):
-    table_orders = [o for o in orders_db if o['table_id'] == table_id]
-    return jsonify({"orders": table_orders})
-
 @app.route('/history')
 def order_history():
     return jsonify(orders_db)
@@ -143,7 +142,7 @@ def serve_item():
             if order['id'] == target_order_id:
                 for item in order['items']:
                     if item['name'] == item_name and item.get('pending_qty', 0) > 0:
-                        item['pending_qty'] -= 1
+                        item['pending_qty'] -= 1  
                         break
                 
                 all_served = all(i.get('pending_qty', 0) == 0 for i in order['items'])
@@ -190,30 +189,6 @@ def update_status():
                 save_persisted_db(orders_db, order_id_counter, order_routing_index)
                 return jsonify({"success": True}), 200
         return jsonify({"success": False}), 404
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 400
-
-# RESTORED: Compiles invoice data for a table AND safely deletes only those table entries on execution
-@app.route('/download_invoice/<int:table_id>', methods=['POST'])
-def download_invoice(table_id):
-    global orders_db, order_id_counter, order_routing_index
-    try:
-        # 1. Isolate the orders belonging to this table
-        invoice_orders = [o for o in orders_db if o['table_id'] == table_id]
-        
-        if not invoice_orders:
-            return jsonify({"success": False, "error": "No orders found for this table layout."}), 404
-            
-        # 2. Clear out ONLY this specific table's orders from the active database array
-        orders_db = [o for o in orders_db if o['table_id'] != table_id]
-        
-        # 3. Permanently write change updates back to orders_session.json
-        save_persisted_db(orders_db, order_id_counter, order_routing_index)
-        
-        return jsonify({
-            "success": True, 
-            "invoice_data": invoice_orders
-        }), 200
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
 
