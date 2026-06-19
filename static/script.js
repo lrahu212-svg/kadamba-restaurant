@@ -4,12 +4,21 @@ let customerName = "";
 let customerPhone = "";
 let currentActiveOrders = []; 
 
-const TABLE_ID = parseInt(document.body.getAttribute("data-table")) || 0;
-const IS_WAITER_PAGE = document.body.getAttribute("data-page") === "waiter";
-const KITCHEN_ID_TARGET = parseInt(document.body.getAttribute("data-kitchen")) || 0;
+// Parse the URL parameters
+const urlParams = new URLSearchParams(window.location.search);
+let TABLE_ID = parseInt(urlParams.get('table_id')) || 0;
+const SECURE_TOKEN = urlParams.get('token') || "";
+
+const currentPath = window.location.pathname.toLowerCase();
+let IS_WAITER_PAGE = currentPath.includes("waiter");
+let IS_OWNER_PAGE = currentPath.includes("owner");
+let KITCHEN_ID_TARGET = currentPath.includes("kitchen1") ? 1 : (currentPath.includes("kitchen2") ? 2 : 0);
+
+let IS_KITCHEN_PAGE = KITCHEN_ID_TARGET > 0;
+let IS_CUSTOMER_PAGE = !IS_WAITER_PAGE && !IS_OWNER_PAGE && !IS_KITCHEN_PAGE;
 
 function verifyUserSession() {
-    if (TABLE_ID === 0) return; 
+    if (!IS_CUSTOMER_PAGE) return; 
     let welcomeBox = document.getElementById("welcomeModal");
     if (customerName && customerPhone) {
         if (welcomeBox) {
@@ -146,22 +155,38 @@ function renderCart() {
 
 function placeOrder() {
     if (cart.length === 0) return;
+    
     fetch('/place_order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             items: cart, 
             table_id: TABLE_ID,
+            token: SECURE_TOKEN, 
             customer_name: customerName || "Guest",
             customer_phone: customerPhone || "N/A"
         })
     })
-    .then(r => r.json())
-    .then(() => {
+    .then(r => {
+        if (!r.ok) {
+            document.body.innerHTML = `
+                <div style="background: #111; color: #fff; font-family: sans-serif; text-align: center; padding: 100px 20px; height: 100vh; box-sizing: border-box;">
+                    <h1 style="color: #e74c3c; font-size: 48px; margin-bottom: 20px;">⚠️ Security Alert</h1>
+                    <p style="font-size: 18px; color: #ccc;">Transaction rejected. The session token is invalid or tampered.</p>
+                </div>
+            `;
+            throw new Error("Security verification rejected this transaction.");
+        }
+        return r.json();
+    })
+    .then((res) => {
         showToast(`Order dispatched! 👍`);
         cart = [];
         renderCart();
         loadHistory();
+    })
+    .catch(err => {
+        console.error("Order process failure:", err);
     });
 }
 
@@ -177,7 +202,6 @@ function loadHistory() {
     .then(res => {
         let allOrders = res.orders || [];
         
-        // Safety Clean: If owner wiped database logs, reset local view storage lists
         let maxBackendID = allOrders.length > 0 ? Math.max(...allOrders.map(o => o.id)) : 0;
         let invoicedIDs = JSON.parse(localStorage.getItem('invoiced_order_ids')) || [];
         if (invoicedIDs.length > 0 && maxBackendID < Math.max(...invoicedIDs)) {
@@ -185,7 +209,6 @@ function loadHistory() {
             localStorage.setItem('invoiced_order_ids', JSON.stringify([]));
         }
 
-        // Exclude orders flagged locally as invoiced on this client browser
         let activeOrders = allOrders.filter(o => 
             o.table_id === TABLE_ID && 
             o.customer_phone === customerPhone && 
@@ -242,6 +265,9 @@ function loadHistory() {
             `;
         }
         box.appendChild(masterBtnDiv);
+    })
+    .catch(() => {
+        if(box) box.innerHTML = '<p class="empty-state" style="color:red;">Security syncing offline.</p>';
     });
 }
 
@@ -305,14 +331,12 @@ function printTableInvoiceAndClear() {
     invoiceWindow.document.write(html);
     invoiceWindow.document.close();
 
-    // Store order IDs to hide them locally from this client's view
     let invoicedIDs = JSON.parse(localStorage.getItem('invoiced_order_ids')) || [];
     currentActiveOrders.forEach(o => {
         if (!invoicedIDs.includes(o.id)) invoicedIDs.push(o.id);
     });
     localStorage.setItem('invoiced_order_ids', JSON.stringify(invoicedIDs));
 
-    // Empty the local active cart/orders but KEEP customerName and customerPhone intact
     cart = [];
     currentActiveOrders = [];
     renderCart();
@@ -329,8 +353,21 @@ function calculateDurationText(startTimeMs) {
     return `${Math.floor(diffSecs / 60)}m ${diffSecs % 60}s`;
 }
 
+// ============================================================================
+// NEW FUNCTION: Live Ticking Kitchen Timer
+// ============================================================================
+function updateLiveTimers() {
+    let timers = document.querySelectorAll('.timer-large');
+    timers.forEach(t => {
+        let startMs = parseInt(t.getAttribute('data-start'));
+        if (!isNaN(startMs)) {
+            t.innerText = calculateDurationText(startMs);
+        }
+    });
+}
+
 function transmitKitchenHeartbeat() {
-    if (KITCHEN_ID_TARGET === 0) return;
+    if (!IS_KITCHEN_PAGE) return;
     fetch('/kitchen_ping', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -345,7 +382,7 @@ function serveSingleFoodItem(orderId, itemName) {
         body: JSON.stringify({ order_id: orderId, item_name: itemName })
     }).then(() => {
         loadOrders();
-        if (TABLE_ID > 0) loadHistory();
+        if (IS_CUSTOMER_PAGE && TABLE_ID > 0) loadHistory();
     });
 }
 
@@ -419,7 +456,6 @@ function loadOrders() {
         }
 
         if (kitchenGrid) {
-            // --- AUTOMATIC KITCHEN INCOMING ORDER SILENT PRINT TRIGGER ---
             let currentMaxId = allOrders.length > 0 ? Math.max(...allOrders.map(o => o.id)) : 0;
             if (typeof window.lastPrintedOrderId === 'undefined') {
                 window.lastPrintedOrderId = currentMaxId; 
@@ -443,7 +479,6 @@ function loadOrders() {
                 });
                 window.lastPrintedOrderId = currentMaxId;
             }
-            // --- END AUTOMATIC PRINT ENGINE ---
 
             let targetQueue = [];
             
@@ -531,7 +566,7 @@ function update(id, status) {
         body: JSON.stringify({ id: id, status: status })
     }).then(() => {
         loadOrders();
-        if (TABLE_ID > 0) loadHistory();
+        if (IS_CUSTOMER_PAGE && TABLE_ID > 0) loadHistory();
     });
 }
 
@@ -543,7 +578,6 @@ function filterMenu() {
     });
 }
 
-// --- HARDWARE PRINTER LOGIC ADDITION ---
 let selectedPrinterType = localStorage.getItem("kitchen_printer_type") || "none";
 let savedWifiIP = localStorage.getItem("kitchen_printer_wifi_ip") || "";
 let connectedUsbDevice = null;
@@ -559,7 +593,7 @@ function changePrinterSetup() {
     let statusText = document.getElementById("printerStatusText");
     
     if (selectedPrinterType === "none") {
-        connectBtn.style.display = "none"; // TYPO FIXED HERE
+        connectBtn.style.display = "none"; 
         statusText.innerText = "";
     } else if (selectedPrinterType === "wifi") {
         connectBtn.style.display = "inline-block";
@@ -669,6 +703,17 @@ function triggerAutomaticPrint(order) {
 }
 
 window.onload = function() {
+    
+    if (document.body) {
+        if (TABLE_ID === 0) TABLE_ID = parseInt(document.body.getAttribute("data-table")) || 0;
+        if (!IS_WAITER_PAGE) IS_WAITER_PAGE = document.body.getAttribute("data-page") === "waiter";
+        if (!IS_OWNER_PAGE) IS_OWNER_PAGE = document.body.getAttribute("data-page") === "owner";
+        if (KITCHEN_ID_TARGET === 0) KITCHEN_ID_TARGET = parseInt(document.body.getAttribute("data-kitchen")) || 0;
+    }
+    
+    IS_KITCHEN_PAGE = KITCHEN_ID_TARGET > 0;
+    IS_CUSTOMER_PAGE = !IS_WAITER_PAGE && !IS_OWNER_PAGE && !IS_KITCHEN_PAGE;
+
     let kitchenGrid = document.getElementById("kitchenGrid");
     if (kitchenGrid) {
         kitchenGrid.innerHTML = "";
@@ -680,14 +725,26 @@ window.onload = function() {
         }
         initPrinterUIOnLoad();
     }
-    verifyUserSession();
-    loadOrders();
     
-    if (TABLE_ID > 0) {
-        loadHistory();
-        setInterval(loadHistory, 3000); 
+    if (IS_CUSTOMER_PAGE) {
+        verifyUserSession();
+        if (TABLE_ID > 0) {
+            loadHistory();
+            setInterval(loadHistory, 3000); 
+        }
     }
     
-    setInterval(loadOrders, 3000);
-    setInterval(transmitKitchenHeartbeat, 2000);
+    if (IS_WAITER_PAGE || IS_OWNER_PAGE || IS_KITCHEN_PAGE) {
+        loadOrders();
+        setInterval(loadOrders, 3000);
+    }
+    
+    if (IS_KITCHEN_PAGE) {
+        setInterval(transmitKitchenHeartbeat, 2000);
+        
+        // ====================================================================
+        // NEW TIMING ENGINE: Triggers the live kitchen UI clocks every second
+        // ====================================================================
+        setInterval(updateLiveTimers, 1000); 
+    }
 };

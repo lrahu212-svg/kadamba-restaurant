@@ -15,7 +15,7 @@
         .badge-served { background: #27ae60; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
     </style>
 </head>
-<body>
+<body data-page="owner">
 
     <div class="dashboard-header">
         <h1 style="color: #C5A059; margin: 0; font-size: 28px; letter-spacing: 1px;">OWNER CONTROL PANEL</h1>
@@ -38,9 +38,10 @@
 
     <script>
         function loadOwnerFeed() {
-            fetch('/history')
+            fetch('/get_orders')
             .then(r => r.json())
-            .then(orders => {
+            .then(res => {
+                let orders = res.orders || [];
                 let box = document.getElementById("ownerHistoryFeed");
                 let servedOrders = orders.filter(o => o.status === "Served");
 
@@ -52,7 +53,6 @@
                 box.innerHTML = "";
                 
                 servedOrders.forEach(o => {
-                    // Compute unique order total for the row item audit line
                     let orderTotal = o.items.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.qty)), 0);
                     let itemsStr = o.items.map(i => `${i.name} (x${i.qty})`).join(", ");
                     
@@ -78,7 +78,7 @@
             const doubleCheck = confirm("⚠️ DATABASE WIPE WARNING!\n\nAre you sure you want to download the master report and completely wipe out the system logs?");
             if (!doubleCheck) return;
 
-            fetch('/clear_day_logs', { method: 'POST' })
+            fetch('/wipe_system_archive', { method: 'POST' })
             .then(r => r.json())
             .then(response => {
                 if (!response.success) { alert("Server verification failed."); return; }
